@@ -1,0 +1,468 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Whale Tracker · Polymarket</title>
+<style>
+  :root {
+    --bg: #0d0d0d;
+    --card: #161616;
+    --border: #2a2a2a;
+    --accent: #00e5a0;
+    --red: #ff4d6d;
+    --muted: #555;
+    --text: #e8e8e8;
+    --sub: #888;
+    font-size: 15px;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", sans-serif;
+    padding: env(safe-area-inset-top, 16px) env(safe-area-inset-right, 16px)
+             env(safe-area-inset-bottom, 24px) env(safe-area-inset-left, 16px);
+    padding-top: max(env(safe-area-inset-top), 20px);
+    min-height: 100dvh;
+  }
+
+  header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 12px 0 20px;
+    border-bottom: 1px solid var(--border);
+    margin-bottom: 20px;
+  }
+  header h1 { font-size: 1.1rem; font-weight: 700; letter-spacing: -0.3px; }
+  header span { font-size: 0.78rem; color: var(--sub); }
+
+  #run-btn {
+    display: block;
+    width: 100%;
+    padding: 14px;
+    border: none;
+    border-radius: 12px;
+    background: var(--accent);
+    color: #000;
+    font-size: 1rem;
+    font-weight: 700;
+    cursor: pointer;
+    transition: opacity 0.15s;
+    margin-bottom: 20px;
+    -webkit-tap-highlight-color: transparent;
+  }
+  #run-btn:disabled { opacity: 0.45; cursor: default; }
+  #run-btn:active:not(:disabled) { opacity: 0.75; }
+
+  #status {
+    font-size: 0.82rem;
+    color: var(--sub);
+    margin-bottom: 16px;
+    min-height: 1.2em;
+    text-align: center;
+  }
+
+  .progress-wrap {
+    height: 3px;
+    background: var(--border);
+    border-radius: 2px;
+    margin-bottom: 20px;
+    overflow: hidden;
+    display: none;
+  }
+  .progress-bar {
+    height: 100%;
+    background: var(--accent);
+    border-radius: 2px;
+    transition: width 0.2s ease;
+    width: 0%;
+  }
+
+  .section-label {
+    font-size: 0.7rem;
+    font-weight: 600;
+    color: var(--sub);
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    margin-bottom: 10px;
+  }
+
+  .card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 14px 16px;
+    margin-bottom: 10px;
+  }
+
+  .card-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 8px;
+    margin-bottom: 10px;
+  }
+  .rank {
+    font-size: 0.72rem;
+    font-weight: 700;
+    color: var(--sub);
+    min-width: 20px;
+    padding-top: 2px;
+  }
+  .question {
+    flex: 1;
+    font-size: 0.9rem;
+    font-weight: 600;
+    line-height: 1.35;
+    color: var(--text);
+  }
+  .whale-count {
+    font-size: 1rem;
+    font-weight: 800;
+    color: var(--accent);
+    min-width: 28px;
+    text-align: right;
+  }
+
+  .card-meta {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 8px;
+  }
+  .pct-badge {
+    font-size: 0.72rem;
+    background: #1a2e24;
+    color: var(--accent);
+    padding: 2px 8px;
+    border-radius: 99px;
+    font-weight: 600;
+  }
+  .whale-label { font-size: 0.72rem; color: var(--sub); }
+
+  .bet-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+  .bet-badge {
+    font-size: 0.78rem;
+    font-weight: 800;
+    padding: 3px 10px;
+    border-radius: 8px;
+    min-width: 46px;
+    text-align: center;
+  }
+  .bet-yes { background: #0d2e1e; color: #00e5a0; }
+  .bet-no  { background: #2e0d15; color: #ff4d6d; }
+  .bet-split { background: #1e1e0d; color: #e5c300; }
+
+  .bar-wrap {
+    flex: 1;
+    height: 6px;
+    background: var(--border);
+    border-radius: 3px;
+    overflow: hidden;
+    display: flex;
+  }
+  .bar-yes { background: var(--accent); height: 100%; transition: width 0.4s ease; }
+  .bar-no  { background: var(--red);    height: 100%; transition: width 0.4s ease; }
+
+  .split-label { font-size: 0.72rem; color: var(--sub); white-space: nowrap; }
+
+  .error-msg {
+    background: #2e0d15;
+    border: 1px solid var(--red);
+    border-radius: 12px;
+    padding: 14px 16px;
+    font-size: 0.85rem;
+    color: #ff8099;
+    line-height: 1.5;
+    display: none;
+  }
+
+  .summary-row {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 20px;
+  }
+  .summary-chip {
+    flex: 1;
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 10px 12px;
+    text-align: center;
+  }
+  .summary-chip .val { font-size: 1.2rem; font-weight: 800; color: var(--accent); }
+  .summary-chip .lbl { font-size: 0.68rem; color: var(--sub); margin-top: 2px; }
+
+  #results { display: none; }
+
+  footer {
+    text-align: center;
+    font-size: 0.7rem;
+    color: var(--muted);
+    margin-top: 28px;
+    padding-bottom: 8px;
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div>
+    <h1>🐳 Whale Tracker</h1>
+    <span>Polymarket · Weekly Top 100</span>
+  </div>
+</header>
+
+<button id="run-btn" onclick="runAnalysis()">Find Whale Convergence</button>
+
+<div class="progress-wrap" id="prog-wrap">
+  <div class="progress-bar" id="prog-bar"></div>
+</div>
+
+<div id="status"></div>
+<div class="error-msg" id="error-box"></div>
+
+<div id="results">
+  <div class="summary-row" id="summary-row"></div>
+  <div class="section-label">Top 10 Markets by Whale Overlap</div>
+  <div id="cards"></div>
+</div>
+
+<footer>Data: data-api.polymarket.com · gamma-api.polymarket.com</footer>
+
+<script>
+// ─── Config ────────────────────────────────────────────────────────────────
+const LEADERBOARD_URL = 'https://data-api.polymarket.com/v1/leaderboard';
+const POSITIONS_URL   = 'https://data-api.polymarket.com/positions';
+const GAMMA_URL       = 'https://gamma-api.polymarket.com/markets';
+const TOP_WALLETS     = 100;
+const TOP_MARKETS     = 10;
+const CONCURRENCY     = 8;   // parallel position fetches
+
+// ─── Helpers ───────────────────────────────────────────────────────────────
+function setStatus(msg) {
+  document.getElementById('status').textContent = msg;
+}
+function setProgress(done, total) {
+  const pct = total ? (done / total * 100) : 0;
+  document.getElementById('prog-bar').style.width = pct + '%';
+}
+function showError(msg) {
+  const el = document.getElementById('error-box');
+  el.style.display = 'block';
+  el.innerHTML = `<strong>Error</strong><br>${msg}`;
+}
+function hideError() {
+  document.getElementById('error-box').style.display = 'none';
+}
+
+async function fetchJSON(url, params = {}) {
+  const qs = new URLSearchParams(params).toString();
+  const full = qs ? `${url}?${qs}` : url;
+  const res = await fetch(full, { headers: { 'Accept': 'application/json' } });
+  if (!res.ok) throw new Error(`HTTP ${res.status} — ${full}`);
+  return res.json();
+}
+
+// Run up to `limit` promises concurrently
+async function pool(tasks, limit, onDone) {
+  const results = new Array(tasks.length);
+  let idx = 0;
+  async function worker() {
+    while (idx < tasks.length) {
+      const i = idx++;
+      results[i] = await tasks[i]();
+      onDone(i);
+    }
+  }
+  const workers = Array.from({ length: Math.min(limit, tasks.length) }, worker);
+  await Promise.all(workers);
+  return results;
+}
+
+// ─── Leaderboard (paginated, max 50/page) ──────────────────────────────────
+async function fetchLeaderboard(total = 100) {
+  const wallets = [];
+  let offset = 0;
+  while (wallets.length < total) {
+    const limit = Math.min(50, total - wallets.length);
+    const data = await fetchJSON(LEADERBOARD_URL, {
+      timePeriod: 'WEEK', orderBy: 'PNL', limit, offset
+    });
+    const rows = Array.isArray(data) ? data : (data.data || []);
+    if (!rows.length) break;
+    for (const r of rows) {
+      const addr = r.proxyWallet || r.proxy_wallet || r.address || r.wallet;
+      if (addr) wallets.push(addr.toLowerCase());
+    }
+    offset += rows.length;
+    if (rows.length < limit) break;
+  }
+  return wallets.slice(0, total);
+}
+
+// ─── Positions for one wallet ───────────────────────────────────────────────
+async function fetchPositions(address) {
+  try {
+    const data = await fetchJSON(POSITIONS_URL, {
+      user: address, sizeThreshold: '0.01',
+      sortBy: 'CASHPNL', sortDirection: 'DESC', limit: 500
+    });
+    const rows = Array.isArray(data) ? data : (data.data || data.positions || []);
+    return rows.filter(p => parseFloat(p.size || p.currentTokens || p.quantity || 0) > 0.01);
+  } catch { return []; }
+}
+
+// ─── Gamma title enrichment ─────────────────────────────────────────────────
+async function enrichTitles(conditionIds, existing) {
+  const missing = conditionIds.filter(id => existing[id] === id || !existing[id]);
+  if (!missing.length) return existing;
+  const titles = { ...existing };
+  for (let i = 0; i < missing.length; i += 20) {
+    const batch = missing.slice(i, i + 20);
+    try {
+      const data = await fetchJSON(GAMMA_URL, { condition_ids: batch.join(',') });
+      const markets = Array.isArray(data) ? data : (data.data || []);
+      for (const m of markets) {
+        const cid = m.conditionId || m.condition_id;
+        if (cid) titles[cid] = m.question || m.title || cid;
+      }
+    } catch { /* keep raw IDs */ }
+  }
+  return titles;
+}
+
+// ─── Main analysis ──────────────────────────────────────────────────────────
+async function runAnalysis() {
+  const btn = document.getElementById('run-btn');
+  btn.disabled = true;
+  hideError();
+  document.getElementById('results').style.display = 'none';
+  document.getElementById('prog-wrap').style.display = 'block';
+  setProgress(0, 1);
+
+  try {
+    // Step 1: leaderboard
+    setStatus('Fetching top 100 weekly-profit wallets…');
+    const wallets = await fetchLeaderboard(TOP_WALLETS);
+    if (!wallets.length) throw new Error('No wallets returned from leaderboard.');
+    setStatus(`Got ${wallets.length} whale wallets. Fetching positions…`);
+
+    // Step 2: positions (pooled)
+    const marketWhales  = {};   // conditionId → Set of addresses
+    const marketOutcomes = {};  // conditionId → { Yes: N, No: N }
+    const marketTitles   = {};  // conditionId → title string
+    let done = 0;
+
+    const tasks = wallets.map(addr => async () => {
+      const positions = await fetchPositions(addr);
+      for (const p of positions) {
+        const cid = p.conditionId || p.condition_id || p.market || p.marketId;
+        if (!cid) continue;
+        if (!marketWhales[cid])   marketWhales[cid]   = new Set();
+        if (!marketOutcomes[cid]) marketOutcomes[cid] = { Yes: 0, No: 0, Other: 0 };
+        marketWhales[cid].add(addr);
+        const outcome = p.outcome || 'Other';
+        marketOutcomes[cid][outcome] = (marketOutcomes[cid][outcome] || 0) + 1;
+        if (!marketTitles[cid])
+          marketTitles[cid] = p.title || p.question || p.marketQuestion || cid;
+      }
+    });
+
+    await pool(tasks, CONCURRENCY, () => {
+      done++;
+      setProgress(done, wallets.length);
+      setStatus(`Processed ${done} / ${wallets.length} wallets…`);
+    });
+
+    const totalPositions = Object.values(marketWhales).reduce((s, w) => s + w.size, 0);
+
+    // Step 3: enrich titles
+    setStatus('Enriching market titles…');
+    const topCids = Object.entries(marketWhales)
+      .sort((a, b) => b[1].size - a[1].size)
+      .slice(0, TOP_MARKETS * 2)
+      .map(([cid]) => cid);
+    const titles = await enrichTitles(topCids, marketTitles);
+
+    // Step 4: rank
+    const ranked = Object.entries(marketWhales)
+      .sort((a, b) => b[1].size - a[1].size)
+      .slice(0, TOP_MARKETS);
+
+    // ── Render ──
+    setStatus('');
+    document.getElementById('prog-wrap').style.display = 'none';
+
+    // Summary chips
+    document.getElementById('summary-row').innerHTML = [
+      { val: wallets.length, lbl: 'Whales scanned' },
+      { val: Object.keys(marketWhales).length, lbl: 'Unique markets' },
+      { val: totalPositions, lbl: 'Open positions' },
+    ].map(c => `
+      <div class="summary-chip">
+        <div class="val">${c.val.toLocaleString()}</div>
+        <div class="lbl">${c.lbl}</div>
+      </div>`).join('');
+
+    // Cards
+    document.getElementById('cards').innerHTML = ranked.map(([cid, whaleSet], i) => {
+      const title   = titles[cid] || cid;
+      const oc      = marketOutcomes[cid] || {};
+      const yesN    = oc.Yes || 0;
+      const noN     = oc.No  || 0;
+      const total   = yesN + noN;
+      const yesPct  = total ? yesN / total : 0.5;
+      const dominant = yesN >= noN ? 'YES' : 'NO';
+      const domCount = yesN >= noN ? yesN : noN;
+      const betClass = yesN > noN ? 'bet-yes' : yesN < noN ? 'bet-no' : 'bet-split';
+      const pct = (100 * whaleSet.size / wallets.length).toFixed(1);
+
+      return `
+      <div class="card">
+        <div class="card-header">
+          <span class="rank">#${i + 1}</span>
+          <span class="question">${escHtml(title)}</span>
+          <span class="whale-count">${whaleSet.size}</span>
+        </div>
+        <div class="card-meta">
+          <span class="pct-badge">${pct}% of whales</span>
+          <span class="whale-label">🐳 ${whaleSet.size} of ${wallets.length}</span>
+        </div>
+        <div class="bet-row">
+          <span class="bet-badge ${betClass}">${dominant} ${domCount}/${total}</span>
+          <div class="bar-wrap">
+            <div class="bar-yes" style="width:${(yesPct*100).toFixed(1)}%"></div>
+            <div class="bar-no"  style="width:${((1-yesPct)*100).toFixed(1)}%"></div>
+          </div>
+          <span class="split-label">${yesN}Y&nbsp;/&nbsp;${noN}N</span>
+        </div>
+      </div>`;
+    }).join('');
+
+    document.getElementById('results').style.display = 'block';
+
+  } catch (err) {
+    setStatus('');
+    document.getElementById('prog-wrap').style.display = 'none';
+    showError(err.message || String(err));
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+function escHtml(s) {
+  return String(s)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;');
+}
+</script>
+</body>
+</html>
