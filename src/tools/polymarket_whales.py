@@ -15,8 +15,8 @@ Usage
 
 API endpoints used
 ------------------
-  Leaderboard : https://polymarket.com/api/profiles/leaderboard?window=weekly&limit=50
-  Positions   : https://data-api.polymarket.com/positions?user=<address>&sizeThreshold=0.01&limit=500
+  Leaderboard : https://data-api.polymarket.com/v1/leaderboard?timePeriod=WEEK&orderBy=PNL&limit=50
+  Positions   : https://data-api.polymarket.com/positions?user=<address>&sortBy=CASHPNL&limit=500
   Market meta : https://gamma-api.polymarket.com/markets?condition_ids=<id1,id2,...>
 """
 
@@ -35,7 +35,7 @@ from rich.progress import Progress, SpinnerColumn, TextColumn, BarColumn, TaskPr
 # ---------------------------------------------------------------------------
 # API constants
 # ---------------------------------------------------------------------------
-LEADERBOARD_URL = "https://polymarket.com/api/profiles/leaderboard"
+LEADERBOARD_URL = "https://data-api.polymarket.com/v1/leaderboard"
 POSITIONS_URL = "https://data-api.polymarket.com/positions"
 GAMMA_MARKETS_URL = "https://gamma-api.polymarket.com/markets"
 
@@ -177,7 +177,7 @@ def _is_open(pos: dict) -> bool:
 async def fetch_leaderboard(client: httpx.AsyncClient, limit: int = 50) -> list[str]:
     resp = await client.get(
         LEADERBOARD_URL,
-        params={"window": "weekly", "limit": limit},
+        params={"timePeriod": "WEEK", "orderBy": "PNL", "limit": min(limit, 50)},
         timeout=30,
     )
     resp.raise_for_status()
@@ -193,7 +193,13 @@ async def fetch_positions_for_wallet(
         try:
             resp = await client.get(
                 POSITIONS_URL,
-                params={"user": address, "sizeThreshold": "0.01", "limit": 500},
+                params={
+                    "user": address,
+                    "sizeThreshold": "0.01",
+                    "sortBy": "CASHPNL",
+                    "sortDirection": "DESC",
+                    "limit": 500,
+                },
                 timeout=30,
             )
             resp.raise_for_status()
