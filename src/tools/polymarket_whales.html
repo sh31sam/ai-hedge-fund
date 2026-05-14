@@ -409,11 +409,11 @@
     </select>
   </label>
 </div>
-<!-- Controls row 2: market category filter -->
+<!-- Controls row 2: market category + subcategory -->
 <div class="controls" style="grid-template-columns:1fr 1fr; margin-bottom:14px;">
-  <label class="ctrl" style="grid-column:1/-1">
-    <span class="ctrl-label">Market category</span>
-    <select id="ctrl-category">
+  <label class="ctrl">
+    <span class="ctrl-label">Category</span>
+    <select id="ctrl-category" onchange="onCategoryChange()">
       <option value="">All markets</option>
       <option value="sports">🏆 Sports</option>
       <option value="politics">🗳 Politics</option>
@@ -422,6 +422,12 @@
       <option value="tech">💻 Tech</option>
       <option value="culture">🎭 Culture</option>
       <option value="weather">🌦 Weather</option>
+    </select>
+  </label>
+  <label class="ctrl">
+    <span class="ctrl-label">Subcategory</span>
+    <select id="ctrl-subcategory" disabled>
+      <option value="">All</option>
     </select>
   </label>
 </div>
@@ -542,9 +548,10 @@ async function fetchPositions(address) {
 }
 
 async function enrichTitlesAndCategories(conditionIds, existingTitles) {
-  const missing = conditionIds.filter(id => existingTitles[id] === id || !existingTitles[id]);
   const titles     = { ...existingTitles };
-  const categories = {};                    // conditionId → category string
+  // categories[cid] = lowercased string blob containing category + tags + slug
+  // so we can keyword-match against it later (handles "Sports" vs "MLB" vs "NBA")
+  const categories = {};
 
   for (let i = 0; i < conditionIds.length; i += 20) {
     const batch = conditionIds.slice(i, i + 20);
@@ -554,12 +561,117 @@ async function enrichTitlesAndCategories(conditionIds, existingTitles) {
       for (const m of mkts) {
         const cid = m.conditionId || m.condition_id;
         if (!cid) continue;
-        titles[cid]     = m.question || m.title || cid;
-        categories[cid] = m.category || m.categories?.[0] || '';
+        titles[cid] = m.question || m.title || cid;
+
+        // Collect every possible category/tag signal into one searchable blob
+        const bits = [];
+        if (m.category) bits.push(m.category);
+        if (Array.isArray(m.categories)) bits.push(...m.categories);
+        if (Array.isArray(m.tags)) {
+          for (const t of m.tags) {
+            if (typeof t === 'string') bits.push(t);
+            else if (t && typeof t === 'object') bits.push(t.label || t.slug || '');
+          }
+        }
+        if (m.slug)      bits.push(m.slug);
+        if (m.eventSlug) bits.push(m.eventSlug);
+        categories[cid] = bits.filter(Boolean).join(' ').toLowerCase();
       }
     } catch { /* keep raw IDs, no category */ }
   }
   return { titles, categories };
+}
+
+// Keyword aliases so e.g. "sports" matches MLB/NBA/NFL/soccer markets
+const CATEGORY_ALIASES = {
+  sports:    ['sports', 'mlb', 'nba', 'nfl', 'nhl', 'soccer', 'tennis', 'ufc', 'mma', 'boxing', 'esports', 'f1', 'golf', 'cricket'],
+  politics:  ['politics', 'election', 'president', 'congress', 'senate', 'trump', 'biden', 'gop', 'democrat'],
+  crypto:    ['crypto', 'bitcoin', 'btc', 'eth', 'ethereum', 'solana', 'doge', 'memecoin'],
+  economics: ['economics', 'economy', 'fed', 'interest', 'recession', 'inflation', 'gdp', 'unemployment', 'jobs'],
+  tech:      ['tech', 'ai', 'openai', 'apple', 'google', 'tesla', 'nvidia', 'meta'],
+  culture:   ['culture', 'movies', 'music', 'celebrity', 'awards', 'oscars', 'grammys', 'tv'],
+  weather:   ['weather', 'hurricane', 'storm', 'climate', 'temperature'],
+};
+
+// Subcategory keyword sets — each value is an array of search terms
+const SUBCATEGORIES = {
+  sports: [
+    { value: 'mlb',    label: '⚾ MLB',    kws: ['mlb', 'baseball', 'yankees', 'dodgers', 'mets', 'red sox', 'astros', 'cubs', 'braves'] },
+    { value: 'nba',    label: '🏀 NBA',    kws: ['nba', 'basketball', 'lakers', 'celtics', 'warriors', 'knicks', 'heat', 'bulls'] },
+    { value: 'nfl',    label: '🏈 NFL',    kws: ['nfl', 'football', 'super bowl', 'cowboys', 'patriots', 'chiefs', 'eagles', '49ers'] },
+    { value: 'nhl',    label: '🏒 NHL',    kws: ['nhl', 'hockey', 'rangers', 'maple leafs', 'oilers'] },
+    { value: 'soccer', label: '⚽ Soccer', kws: ['soccer', 'football club', 'premier league', 'champions league', 'la liga', 'world cup', 'mls', 'epl'] },
+    { value: 'ufc',    label: '🥋 UFC/MMA',kws: ['ufc', 'mma', 'mixed martial', 'boxing'] },
+    { value: 'tennis', label: '🎾 Tennis', kws: ['tennis', 'wimbledon', 'us open', 'french open', 'atp', 'wta'] },
+    { value: 'f1',     label: '🏎 F1',     kws: ['f1', 'formula 1', 'grand prix', 'verstappen', 'hamilton'] },
+    { value: 'golf',   label: '⛳ Golf',   kws: ['golf', 'pga', 'masters', 'tiger', 'rory'] },
+  ],
+  politics: [
+    { value: 'us-election', label: '🇺🇸 US Elections', kws: ['president', 'election', 'gop', 'democrat', 'primary', 'caucus', 'electoral'] },
+    { value: 'trump',       label: '👤 Trump',         kws: ['trump'] },
+    { value: 'congress',    label: '🏛 Congress',      kws: ['congress', 'senate', 'house', 'speaker'] },
+    { value: 'world',       label: '🌍 World',         kws: ['ukraine', 'russia', 'china', 'taiwan', 'iran', 'israel', 'gaza', 'putin', 'xi'] },
+  ],
+  crypto: [
+    { value: 'bitcoin',  label: '₿ Bitcoin',  kws: ['bitcoin', 'btc'] },
+    { value: 'ethereum', label: 'Ξ Ethereum', kws: ['ethereum', 'eth', 'ether'] },
+    { value: 'solana',   label: '◎ Solana',   kws: ['solana', 'sol'] },
+    { value: 'memecoin', label: '🐶 Memecoins',kws: ['doge', 'shib', 'pepe', 'memecoin', 'meme coin', 'wif', 'bonk'] },
+  ],
+  economics: [
+    { value: 'fed',       label: '🏦 Fed Rates',  kws: ['fed', 'interest rate', 'rate cut', 'rate hike', 'fomc', 'powell'] },
+    { value: 'recession', label: '📉 Recession',  kws: ['recession', 'gdp', 'downturn'] },
+    { value: 'inflation', label: '💸 Inflation',  kws: ['inflation', 'cpi', 'ppi'] },
+    { value: 'jobs',      label: '💼 Jobs',       kws: ['unemployment', 'jobs report', 'payroll', 'labor'] },
+  ],
+  tech: [
+    { value: 'ai',     label: '🤖 AI',     kws: ['ai', 'artificial intelligence', 'agi', 'openai', 'anthropic', 'claude', 'gpt', 'gemini'] },
+    { value: 'apple',  label: '🍎 Apple',  kws: ['apple', 'iphone'] },
+    { value: 'tesla',  label: '🚗 Tesla',  kws: ['tesla', 'musk', 'cybertruck'] },
+    { value: 'nvidia', label: '💚 Nvidia', kws: ['nvidia', 'gpu'] },
+  ],
+  culture: [
+    { value: 'movies', label: '🎬 Movies', kws: ['movie', 'film', 'box office', 'oscar'] },
+    { value: 'music',  label: '🎵 Music',  kws: ['music', 'grammy', 'album', 'taylor swift', 'drake'] },
+    { value: 'awards', label: '🏆 Awards', kws: ['oscar', 'grammy', 'emmy', 'award'] },
+  ],
+  weather: [
+    { value: 'hurricane',   label: '🌀 Hurricane',   kws: ['hurricane', 'tropical storm', 'cyclone'] },
+    { value: 'temperature', label: '🌡 Temperature', kws: ['temperature', 'hottest', 'coldest', 'heatwave'] },
+  ],
+};
+
+function matchesCategory(blob, selectedCat, selectedSub) {
+  if (!selectedCat && !selectedSub) return true;
+  if (!blob) return false;
+  // If a subcategory is picked, match against ITS specific keywords (more precise)
+  if (selectedSub) {
+    const subList = SUBCATEGORIES[selectedCat] || [];
+    const sub = subList.find(s => s.value === selectedSub);
+    if (sub) return sub.kws.some(kw => blob.includes(kw));
+  }
+  // Otherwise fall back to the broad parent-category keyword set
+  const aliases = CATEGORY_ALIASES[selectedCat] || [selectedCat];
+  return aliases.some(a => blob.includes(a));
+}
+
+// Populate the subcategory dropdown when the parent category changes
+function onCategoryChange() {
+  const cat = document.getElementById('ctrl-category').value;
+  const sub = document.getElementById('ctrl-subcategory');
+  sub.innerHTML = '<option value="">All</option>';
+  const list = SUBCATEGORIES[cat] || [];
+  if (!cat || list.length === 0) {
+    sub.disabled = true;
+    return;
+  }
+  sub.disabled = false;
+  for (const item of list) {
+    const opt = document.createElement('option');
+    opt.value = item.value;
+    opt.textContent = item.label;
+    sub.appendChild(opt);
+  }
 }
 
 // ─── Main analysis ──────────────────────────────────────────────────────────
@@ -571,14 +683,25 @@ async function runAnalysis() {
   document.getElementById('prog-wrap').style.display = 'block';
   setProgress(0, 1);
 
-  const timePeriod = document.getElementById('ctrl-window').value;
-  const orderBy    = document.getElementById('ctrl-order').value;
-  const topN       = parseInt(document.getElementById('ctrl-n').value, 10);
-  const category   = document.getElementById('ctrl-category').value;  // '' = all
+  const timePeriod   = document.getElementById('ctrl-window').value;
+  const orderBy      = document.getElementById('ctrl-order').value;
+  const topN         = parseInt(document.getElementById('ctrl-n').value, 10);
+  const category     = document.getElementById('ctrl-category').value;       // '' = all
+  const subcategory  = document.getElementById('ctrl-subcategory').value;    // '' = all of category
+
+  // Build a human-readable filter label
+  let filterLabel = '';
+  if (subcategory) {
+    const subList = SUBCATEGORIES[category] || [];
+    const sub = subList.find(s => s.value === subcategory);
+    filterLabel = sub ? sub.label : subcategory;
+  } else if (category) {
+    filterLabel = category;
+  }
 
   try {
-    const catLabel = category ? ` · ${category}` : '';
-    setStatus(`Fetching top ${topN} wallets by ${ORDER_LABEL[orderBy]} (${WINDOW_LABEL[timePeriod]}${catLabel})…`);
+    const filterStatus = filterLabel ? ` · filter: ${filterLabel}` : '';
+    setStatus(`Fetching top ${topN} wallets by ${ORDER_LABEL[orderBy]} (${WINDOW_LABEL[timePeriod]})${filterStatus}…`);
     const wallets = await fetchLeaderboard(topN, timePeriod, orderBy);
     if (!wallets.length) throw new Error('No wallets returned from the leaderboard.');
     setStatus(`Got ${wallets.length} whale wallets. Fetching positions…`);
@@ -638,12 +761,13 @@ async function runAnalysis() {
       .map(([cid]) => cid);
     const { titles, categories: gammaCategories } = await enrichTitlesAndCategories(topCids, titleSeed);
 
-    // Apply category filter — compare against Gamma-returned category (case-insensitive)
-    const activeCat = category.toLowerCase();
-    const filtered = Object.entries(markets).filter(([cid]) => {
-      if (!activeCat) return true;
-      const c = (gammaCategories[cid] || '').toLowerCase();
-      return c.includes(activeCat);
+    // Apply category + subcategory filter
+    // Match against Gamma category/tags AND market title (so e.g. "MLB" picks up
+    // baseball games even when Gamma only labels them "Sports")
+    const filtered = Object.entries(markets).filter(([cid, m]) => {
+      if (!category) return true;
+      const blob = (gammaCategories[cid] || '') + ' ' + (titles[cid] || m.title || '').toLowerCase();
+      return matchesCategory(blob, category, subcategory);
     });
 
     const ranked = filtered
@@ -665,13 +789,28 @@ async function runAnalysis() {
         <div class="lbl">${c.lbl}</div>
       </div>`).join('');
 
-    const catNote = category ? ` · showing <strong>${category}</strong> markets only` : '';
+    const catNote = filterLabel ? ` · showing <strong>${escHtml(filterLabel)}</strong> markets only` : '';
     document.getElementById('scan-meta').innerHTML =
       `Ranked top <strong>${wallets.length}</strong> wallets by <strong>${ORDER_LABEL[orderBy]}</strong> ` +
       `(${WINDOW_LABEL[timePeriod]})${catNote}. Convergence is measured across all ${wallets.length}.`;
 
     // Cards — denominator is ALWAYS the scanned wallet count
     const N = wallets.length;
+
+    // Empty state: filter eliminated everything
+    if (ranked.length === 0) {
+      const reason = filterLabel
+        ? `No <strong>${escHtml(filterLabel)}</strong> markets found among the top ${N} ${ORDER_LABEL[orderBy]} leaders' positions.<br>` +
+          `Try <strong>All markets</strong>, increase <strong># Wallets</strong>, or pick a different category.`
+        : 'No markets found. Try increasing # Wallets or switching the window.';
+      document.getElementById('cards').innerHTML =
+        `<div class="card" style="text-align:center;color:var(--sub);padding:24px 16px;">${reason}</div>`;
+      document.getElementById('results').style.display = 'block';
+      document.getElementById('header-sub').textContent =
+        `Top ${N} by ${ORDER_LABEL[orderBy]} · ${WINDOW_LABEL[timePeriod]}${filterLabel ? ' · ' + filterLabel : ''}`;
+      return;
+    }
+
     document.getElementById('cards').innerHTML = ranked.map(([cid, m], i) => {
       const title      = titles[cid] || cid;
       const inMarket   = m.whales.size;
@@ -690,13 +829,20 @@ async function runAnalysis() {
         if (p.outcome) w.picks.add(p.outcome);
       }
 
-      // Per-whale net direction
+      // Per-whale net direction — carry positions[] forward so the detail
+      // view can list every individual bet
       const whaleRows = Object.entries(byWallet).map(([addr, w]) => {
         let pick = null;
         if (w.yes > w.no)      pick = 'Yes';
         else if (w.no > w.yes) pick = 'No';
         else if (w.picks.size === 1) pick = [...w.picks][0]; // non-binary outcome
-        return { addr, pick, value: w.totalValue, isHedge: w.yes > 0 && w.no > 0 };
+        return {
+          addr,
+          pick,
+          value: w.totalValue,
+          isHedge: w.yes > 0 && w.no > 0,
+          positions: w.positions || [],   // <-- this was missing, caused crash
+        };
       }).sort((a, b) => b.value - a.value);
 
       const yesN = whaleRows.filter(r => r.pick === 'Yes').length;
@@ -735,9 +881,10 @@ async function runAnalysis() {
         const shortAddr = `${r.addr.slice(0, 6)}…${r.addr.slice(-4)}`;
         const totalValStr = fmtVal(r.value);
 
-        // Render one tag per individual position this wallet holds in the market
-        // Sorted by value descending so their biggest bet shows first
-        const sortedPos = [...r.positions].sort((a, b) => b.value - a.value);
+        // Render one tag per individual position this wallet holds in the market.
+        // Defensive: positions may be missing on legacy data shapes.
+        const posList = Array.isArray(r.positions) ? r.positions : [];
+        const sortedPos = [...posList].sort((a, b) => b.value - a.value);
         const tags = sortedPos.map(p => {
           const out = p.outcome || '?';
           const betValStr = p.value > 0 ? ` · ${fmtVal(p.value)}` : '';
@@ -807,7 +954,7 @@ async function runAnalysis() {
     }).join('');
 
     // Header subtitle reflects the active query
-    const catSuffix = category ? ` · ${category}` : '';
+    const catSuffix = filterLabel ? ` · ${filterLabel.replace(/^[^\w]+\s*/, '')}` : '';
     document.getElementById('header-sub').textContent =
       `Top ${N} by ${ORDER_LABEL[orderBy]} · ${WINDOW_LABEL[timePeriod]}${catSuffix}`;
 
