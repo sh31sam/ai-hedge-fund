@@ -279,9 +279,9 @@
 
   .wallet-row {
     display: flex;
-    align-items: center;
+    align-items: flex-start;
     gap: 8px;
-    padding: 8px 4px;
+    padding: 10px 4px;
     border-radius: 6px;
     text-decoration: none;
     color: inherit;
@@ -290,35 +290,56 @@
   .wallet-row + .wallet-row { border-top: 1px solid #202020; }
   .wallet-row:active { background: #1a1a1a; }
 
-  .wallet-addr {
+  .wallet-info {
     flex: 1;
+    min-width: 0;
+  }
+  .wallet-addr {
     font-family: ui-monospace, "SF Mono", Menlo, monospace;
     font-size: 0.78rem;
     color: var(--text);
+    display: block;
+    margin-bottom: 5px;
+  }
+
+  /* Specific bet tags — one per position the whale holds in this market */
+  .bet-tags {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+  }
+  .bet-tag {
+    font-size: 0.68rem;
+    font-weight: 700;
+    padding: 3px 7px;
+    border-radius: 6px;
+    white-space: nowrap;
+    max-width: 180px;
     overflow: hidden;
     text-overflow: ellipsis;
-    white-space: nowrap;
+    display: flex;
+    align-items: center;
+    gap: 4px;
   }
-  .wallet-pick {
-    font-size: 0.66rem;
-    font-weight: 800;
-    padding: 2px 7px;
-    border-radius: 6px;
-    min-width: 32px;
-    text-align: center;
-    letter-spacing: 0.03em;
+  .bet-tag.yes    { background: #0d2e1e; color: var(--accent); }
+  .bet-tag.no     { background: #2e0d15; color: var(--red); }
+  .bet-tag.named  { background: #16243a; color: #7ab8f5; }
+  .bet-tag.hedge  { background: #2a2510; color: var(--amber); }
+  .bet-tag .bet-val {
+    font-weight: 400;
+    opacity: 0.75;
+    font-size: 0.64rem;
   }
-  .wallet-pick.yes { background: #0d2e1e; color: var(--accent); }
-  .wallet-pick.no  { background: #2e0d15; color: var(--red); }
-  .wallet-pick.un  { background: #1e1e1e; color: var(--sub); }
-  .wallet-value {
+
+  .wallet-total {
     font-size: 0.76rem;
     color: var(--sub);
-    min-width: 70px;
+    min-width: 54px;
     text-align: right;
     font-variant-numeric: tabular-nums;
+    padding-top: 2px;
+    white-space: nowrap;
   }
-  .wallet-value.up { color: var(--accent); }
 
   .wallet-hint {
     font-size: 0.68rem;
@@ -361,7 +382,7 @@
   </div>
 </header>
 
-<!-- Controls -->
+<!-- Controls row 1 -->
 <div class="controls">
   <label class="ctrl">
     <span class="ctrl-label">Window</span>
@@ -385,6 +406,22 @@
       <option value="50">50</option>
       <option value="100" selected>100</option>
       <option value="200">200</option>
+    </select>
+  </label>
+</div>
+<!-- Controls row 2: market category filter -->
+<div class="controls" style="grid-template-columns:1fr 1fr; margin-bottom:14px;">
+  <label class="ctrl" style="grid-column:1/-1">
+    <span class="ctrl-label">Market category</span>
+    <select id="ctrl-category">
+      <option value="">All markets</option>
+      <option value="sports">🏆 Sports</option>
+      <option value="politics">🗳 Politics</option>
+      <option value="crypto">🪙 Crypto</option>
+      <option value="economics">📈 Economics</option>
+      <option value="tech">💻 Tech</option>
+      <option value="culture">🎭 Culture</option>
+      <option value="weather">🌦 Weather</option>
     </select>
   </label>
 </div>
@@ -433,6 +470,10 @@ function hideError() { document.getElementById('error-box').style.display = 'non
 
 function escHtml(s) {
   return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}
+function fmtVal(v) {
+  if (!v || v < 1) return '';
+  return v >= 1000 ? `$${(v/1000).toFixed(1)}k` : `$${Math.round(v)}`;
 }
 
 function toggleCard(i) {
@@ -500,22 +541,25 @@ async function fetchPositions(address) {
   } catch { return []; }
 }
 
-async function enrichTitles(conditionIds, existing) {
-  const missing = conditionIds.filter(id => existing[id] === id || !existing[id]);
-  if (!missing.length) return existing;
-  const titles = { ...existing };
-  for (let i = 0; i < missing.length; i += 20) {
-    const batch = missing.slice(i, i + 20);
+async function enrichTitlesAndCategories(conditionIds, existingTitles) {
+  const missing = conditionIds.filter(id => existingTitles[id] === id || !existingTitles[id]);
+  const titles     = { ...existingTitles };
+  const categories = {};                    // conditionId → category string
+
+  for (let i = 0; i < conditionIds.length; i += 20) {
+    const batch = conditionIds.slice(i, i + 20);
     try {
       const data = await fetchJSON(GAMMA_URL, { condition_ids: batch.join(',') });
-      const markets = Array.isArray(data) ? data : (data.data || []);
-      for (const m of markets) {
+      const mkts = Array.isArray(data) ? data : (data.data || []);
+      for (const m of mkts) {
         const cid = m.conditionId || m.condition_id;
-        if (cid) titles[cid] = m.question || m.title || cid;
+        if (!cid) continue;
+        titles[cid]     = m.question || m.title || cid;
+        categories[cid] = m.category || m.categories?.[0] || '';
       }
-    } catch { /* keep raw IDs */ }
+    } catch { /* keep raw IDs, no category */ }
   }
-  return titles;
+  return { titles, categories };
 }
 
 // ─── Main analysis ──────────────────────────────────────────────────────────
@@ -530,9 +574,11 @@ async function runAnalysis() {
   const timePeriod = document.getElementById('ctrl-window').value;
   const orderBy    = document.getElementById('ctrl-order').value;
   const topN       = parseInt(document.getElementById('ctrl-n').value, 10);
+  const category   = document.getElementById('ctrl-category').value;  // '' = all
 
   try {
-    setStatus(`Fetching top ${topN} wallets by ${ORDER_LABEL[orderBy]} (${WINDOW_LABEL[timePeriod]})…`);
+    const catLabel = category ? ` · ${category}` : '';
+    setStatus(`Fetching top ${topN} wallets by ${ORDER_LABEL[orderBy]} (${WINDOW_LABEL[timePeriod]}${catLabel})…`);
     const wallets = await fetchLeaderboard(topN, timePeriod, orderBy);
     if (!wallets.length) throw new Error('No wallets returned from the leaderboard.');
     setStatus(`Got ${wallets.length} whale wallets. Fetching positions…`);
@@ -561,6 +607,10 @@ async function runAnalysis() {
         markets[cid].positions.push({
           addr,
           outcome: outcome || null,
+          // question is the specific market question (e.g. "Will Twins win?")
+          // title is the event label (e.g. "Marlins vs Twins")
+          // We store both so we can show the specific bet type in the detail view
+          question: (p.question || p.marketQuestion || '').trim(),
           value: parseFloat(p.currentValue || 0),
           size:  parseFloat(p.size || 0),
           price: parseFloat(p.curPrice || p.avgPrice || 0),
@@ -579,16 +629,24 @@ async function runAnalysis() {
 
     const totalPositions = Object.values(markets).reduce((s, m) => s + m.positions.length, 0);
 
-    setStatus('Enriching market titles…');
+    setStatus('Enriching market titles and categories…');
     const titleSeed = {};
     for (const [cid, m] of Object.entries(markets)) titleSeed[cid] = m.title;
     const topCids = Object.entries(markets)
       .sort((a, b) => b[1].whales.size - a[1].whales.size)
-      .slice(0, TOP_MARKETS * 2)
+      .slice(0, TOP_MARKETS * 4)   // fetch more so category filter has enough to cut from
       .map(([cid]) => cid);
-    const titles = await enrichTitles(topCids, titleSeed);
+    const { titles, categories: gammaCategories } = await enrichTitlesAndCategories(topCids, titleSeed);
 
-    const ranked = Object.entries(markets)
+    // Apply category filter — compare against Gamma-returned category (case-insensitive)
+    const activeCat = category.toLowerCase();
+    const filtered = Object.entries(markets).filter(([cid]) => {
+      if (!activeCat) return true;
+      const c = (gammaCategories[cid] || '').toLowerCase();
+      return c.includes(activeCat);
+    });
+
+    const ranked = filtered
       .sort((a, b) => b[1].whales.size - a[1].whales.size)
       .slice(0, TOP_MARKETS);
 
@@ -607,9 +665,10 @@ async function runAnalysis() {
         <div class="lbl">${c.lbl}</div>
       </div>`).join('');
 
+    const catNote = category ? ` · showing <strong>${category}</strong> markets only` : '';
     document.getElementById('scan-meta').innerHTML =
       `Ranked top <strong>${wallets.length}</strong> wallets by <strong>${ORDER_LABEL[orderBy]}</strong> ` +
-      `(${WINDOW_LABEL[timePeriod]}). Convergence below is measured across all ${wallets.length}.`;
+      `(${WINDOW_LABEL[timePeriod]})${catNote}. Convergence is measured across all ${wallets.length}.`;
 
     // Cards — denominator is ALWAYS the scanned wallet count
     const N = wallets.length;
@@ -671,22 +730,46 @@ async function runAnalysis() {
         splitText = top.slice(0, 3).map(([k, v]) => `${escHtml(k)}&nbsp;${v}`).join('&nbsp;/&nbsp;');
       }
 
-      // Build the per-wallet detail list (sorted by position size desc)
+      // Build per-wallet detail rows, showing every specific bet they hold
       const detailRows = whaleRows.map(r => {
         const shortAddr = `${r.addr.slice(0, 6)}…${r.addr.slice(-4)}`;
-        let pickCls = 'un', pickTxt = '?';
-        if (r.isHedge)       { pickCls = 'un';  pickTxt = 'HEDGE'; }
-        else if (r.pick === 'Yes') { pickCls = 'yes'; pickTxt = 'YES'; }
-        else if (r.pick === 'No')  { pickCls = 'no';  pickTxt = 'NO'; }
-        else if (r.pick)     { pickCls = 'yes'; pickTxt = r.pick.toUpperCase().slice(0, 6); }
-        const valStr = r.value >= 1000
-          ? `$${(r.value/1000).toFixed(1)}k`
-          : `$${r.value.toFixed(0)}`;
+        const totalValStr = fmtVal(r.value);
+
+        // Render one tag per individual position this wallet holds in the market
+        // Sorted by value descending so their biggest bet shows first
+        const sortedPos = [...r.positions].sort((a, b) => b.value - a.value);
+        const tags = sortedPos.map(p => {
+          const out = p.outcome || '?';
+          const betValStr = p.value > 0 ? ` · ${fmtVal(p.value)}` : '';
+
+          // Determine what label to show:
+          // 1. If Yes/No outcome AND a specific question exists → show the question
+          // 2. If named outcome (e.g. "Minnesota Twins") → show as-is
+          // 3. Fallback to raw outcome
+          let label, cls;
+          if (out === 'Yes' || out === 'No') {
+            cls = out === 'Yes' ? 'yes' : 'no';
+            // Use the specific question if it meaningfully describes the bet
+            const q = p.question && p.question !== (m.title || '') ? p.question : null;
+            label = q ? `${out === 'Yes' ? '✓' : '✗'} ${q}` : (out === 'Yes' ? 'YES' : 'NO');
+          } else if (out === '?') {
+            cls = 'hedge'; label = 'No data';
+          } else {
+            // Named outcome — show exactly as returned (e.g. "Minnesota Twins", "Over 9.5")
+            cls = 'named'; label = out;
+          }
+
+          const truncLabel = label.length > 32 ? label.slice(0, 30) + '…' : label;
+          return `<span class="bet-tag ${cls}">${escHtml(truncLabel)}<span class="bet-val">${escHtml(betValStr)}</span></span>`;
+        }).join('');
+
         return `
           <a class="wallet-row" href="https://polymarket.com/profile/${r.addr}" target="_blank" rel="noopener">
-            <span class="wallet-addr">${shortAddr}</span>
-            <span class="wallet-pick ${pickCls}">${pickTxt}</span>
-            <span class="wallet-value">${valStr}</span>
+            <div class="wallet-info">
+              <span class="wallet-addr">${shortAddr}</span>
+              <div class="bet-tags">${tags}</div>
+            </div>
+            <span class="wallet-total">${totalValStr}</span>
           </a>`;
       }).join('');
 
@@ -724,8 +807,9 @@ async function runAnalysis() {
     }).join('');
 
     // Header subtitle reflects the active query
+    const catSuffix = category ? ` · ${category}` : '';
     document.getElementById('header-sub').textContent =
-      `Top ${N} by ${ORDER_LABEL[orderBy]} · ${WINDOW_LABEL[timePeriod]}`;
+      `Top ${N} by ${ORDER_LABEL[orderBy]} · ${WINDOW_LABEL[timePeriod]}${catSuffix}`;
 
     document.getElementById('results').style.display = 'block';
 
