@@ -224,9 +224,10 @@
     text-align: center;
     white-space: nowrap;
   }
-  .bet-yes   { background: #0d2e1e; color: var(--accent); }
-  .bet-no    { background: #2e0d15; color: var(--red); }
-  .bet-split { background: #2a2510; color: var(--amber); }
+  .bet-yes     { background: #0d2e1e; color: var(--accent); }
+  .bet-no      { background: #2e0d15; color: var(--red); }
+  .bet-split   { background: #2a2510; color: var(--amber); }
+  .bet-unknown { background: #1e1e1e; color: var(--sub); }
 
   .bar-wrap {
     flex: 1;
@@ -447,12 +448,21 @@ async function runAnalysis() {
         const cid = p.conditionId || p.condition_id || p.market || p.marketId;
         if (!cid) continue;
         if (!marketWhales[cid])   marketWhales[cid]   = new Set();
-        if (!marketOutcomes[cid]) marketOutcomes[cid] = { Yes: 0, No: 0 };
+        if (!marketOutcomes[cid]) marketOutcomes[cid] = {};
         marketWhales[cid].add(addr);
-        const outcome = p.outcome || 'Other';
-        if (outcome === 'Yes' || outcome === 'No') {
-          marketOutcomes[cid][outcome]++;
+
+        // Normalize outcome: case-insensitive, fall back to outcomeIndex (0=Yes, 1=No)
+        let outcome = (p.outcome || '').toString().trim();
+        if (!outcome && typeof p.outcomeIndex === 'number') {
+          outcome = p.outcomeIndex === 0 ? 'Yes' : 'No';
         }
+        if (outcome.toLowerCase() === 'yes') outcome = 'Yes';
+        else if (outcome.toLowerCase() === 'no') outcome = 'No';
+
+        if (outcome) {
+          marketOutcomes[cid][outcome] = (marketOutcomes[cid][outcome] || 0) + 1;
+        }
+
         if (!marketTitles[cid])
           marketTitles[cid] = p.title || p.question || p.marketQuestion || cid;
       }
@@ -499,20 +509,50 @@ async function runAnalysis() {
     // Cards — denominator is ALWAYS the scanned wallet count
     const N = wallets.length;
     document.getElementById('cards').innerHTML = ranked.map(([cid, whaleSet], i) => {
-      const title    = titles[cid] || cid;
-      const oc       = marketOutcomes[cid] || { Yes: 0, No: 0 };
-      const yesN     = oc.Yes;
-      const noN      = oc.No;
-      const inMarket = whaleSet.size;
+      const title      = titles[cid] || cid;
+      const oc         = marketOutcomes[cid] || {};
+      const yesN       = oc['Yes'] || 0;
+      const noN        = oc['No']  || 0;
+      const inMarket   = whaleSet.size;
       const sittingOut = N - inMarket;
-      const total    = yesN + noN || inMarket;  // fall back if outcome missing
-      const yesPct   = total ? yesN / total : 0.5;
-      const pctOfAll = (100 * inMarket / N).toFixed(1);
+      const pctOfAll   = (100 * inMarket / N).toFixed(1);
 
-      let badge;
-      if (yesN > noN)        badge = `<span class="bet-badge bet-yes">YES ${yesN}/${inMarket}</span>`;
-      else if (noN > yesN)   badge = `<span class="bet-badge bet-no">NO ${noN}/${inMarket}</span>`;
-      else                   badge = `<span class="bet-badge bet-split">SPLIT ${yesN}/${noN}</span>`;
+      // Find dominant outcome across ALL outcomes (handles non-binary markets too)
+      const outcomeEntries = Object.entries(oc).sort((a, b) => b[1] - a[1]);
+      const totalVotes     = outcomeEntries.reduce((s, [, n]) => s + n, 0);
+      const topOutcome     = outcomeEntries[0]?.[0];
+      const topCount       = outcomeEntries[0]?.[1] || 0;
+      const isBinary       = outcomeEntries.length <= 2 &&
+                             outcomeEntries.every(([k]) => k === 'Yes' || k === 'No');
+
+      let badge, barYesPct, splitText;
+
+      if (totalVotes === 0) {
+        // No outcome data came back from the API for these positions
+        badge      = `<span class="bet-badge bet-unknown">No data</span>`;
+        barYesPct  = 0;
+        splitText  = '—';
+      } else if (isBinary) {
+        const tied = yesN === noN;
+        if (tied) {
+          badge = `<span class="bet-badge bet-split">TIE ${yesN}/${noN}</span>`;
+        } else if (yesN > noN) {
+          badge = `<span class="bet-badge bet-yes">YES ${yesN}/${inMarket}</span>`;
+        } else {
+          badge = `<span class="bet-badge bet-no">NO ${noN}/${inMarket}</span>`;
+        }
+        barYesPct = totalVotes ? yesN / totalVotes : 0.5;
+        splitText = `${yesN}Y&nbsp;/&nbsp;${noN}N`;
+      } else {
+        // Multi-outcome market (e.g. "Biden 32 / Trump 18 / Other 5")
+        const label = escHtml(topOutcome || '?');
+        badge = `<span class="bet-badge bet-yes">${label} ${topCount}/${inMarket}</span>`;
+        barYesPct = totalVotes ? topCount / totalVotes : 0;
+        // Show top two outcomes in split text
+        splitText = outcomeEntries.slice(0, 3)
+          .map(([k, v]) => `${escHtml(k)}&nbsp;${v}`)
+          .join('&nbsp;/&nbsp;');
+      }
 
       return `
         <div class="card">
@@ -529,10 +569,10 @@ async function runAnalysis() {
           <div class="bet-row">
             ${badge}
             <div class="bar-wrap">
-              <div class="bar-yes" style="width:${(yesPct*100).toFixed(1)}%"></div>
-              <div class="bar-no"  style="width:${((1-yesPct)*100).toFixed(1)}%"></div>
+              <div class="bar-yes" style="width:${(barYesPct*100).toFixed(1)}%"></div>
+              <div class="bar-no"  style="width:${((1-barYesPct)*100).toFixed(1)}%"></div>
             </div>
-            <span class="split-label">${yesN}Y&nbsp;/&nbsp;${noN}N</span>
+            <span class="split-label">${splitText}</span>
           </div>
         </div>`;
     }).join('');
