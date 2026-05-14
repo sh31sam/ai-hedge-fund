@@ -242,6 +242,93 @@
 
   .split-label { font-size: 0.72rem; color: var(--sub); white-space: nowrap; }
 
+  /* ── Expand/collapse wallet detail ─────────────────────────────────────── */
+  .toggle-row {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    margin-top: 12px;
+    padding: 8px;
+    background: #1c1c1c;
+    border-radius: 8px;
+    font-size: 0.74rem;
+    font-weight: 600;
+    color: var(--sub);
+    cursor: pointer;
+    -webkit-tap-highlight-color: transparent;
+    user-select: none;
+    transition: background 0.15s;
+  }
+  .toggle-row:active { background: #232323; }
+  .toggle-row .chev {
+    display: inline-block;
+    transition: transform 0.2s ease;
+    color: var(--accent);
+    font-weight: 800;
+  }
+  .card.expanded .toggle-row .chev { transform: rotate(180deg); }
+
+  .wallet-list {
+    display: none;
+    margin-top: 10px;
+    border-top: 1px solid var(--border);
+    padding-top: 10px;
+  }
+  .card.expanded .wallet-list { display: block; }
+
+  .wallet-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 4px;
+    border-radius: 6px;
+    text-decoration: none;
+    color: inherit;
+    -webkit-tap-highlight-color: rgba(0,229,160,0.08);
+  }
+  .wallet-row + .wallet-row { border-top: 1px solid #202020; }
+  .wallet-row:active { background: #1a1a1a; }
+
+  .wallet-addr {
+    flex: 1;
+    font-family: ui-monospace, "SF Mono", Menlo, monospace;
+    font-size: 0.78rem;
+    color: var(--text);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .wallet-pick {
+    font-size: 0.66rem;
+    font-weight: 800;
+    padding: 2px 7px;
+    border-radius: 6px;
+    min-width: 32px;
+    text-align: center;
+    letter-spacing: 0.03em;
+  }
+  .wallet-pick.yes { background: #0d2e1e; color: var(--accent); }
+  .wallet-pick.no  { background: #2e0d15; color: var(--red); }
+  .wallet-pick.un  { background: #1e1e1e; color: var(--sub); }
+  .wallet-value {
+    font-size: 0.76rem;
+    color: var(--sub);
+    min-width: 70px;
+    text-align: right;
+    font-variant-numeric: tabular-nums;
+  }
+  .wallet-value.up { color: var(--accent); }
+
+  .wallet-hint {
+    font-size: 0.68rem;
+    color: var(--muted);
+    text-align: center;
+    margin-top: 8px;
+    padding: 4px 0;
+    font-style: italic;
+  }
+
   .error-msg {
     background: #2e0d15;
     border: 1px solid var(--red);
@@ -348,6 +435,19 @@ function escHtml(s) {
   return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 }
 
+function toggleCard(i) {
+  const card = document.getElementById(`card-${i}`);
+  if (!card) return;
+  const isOpen = card.classList.toggle('expanded');
+  const label = card.querySelector('.toggle-label');
+  if (label) {
+    const n = card.querySelectorAll('.wallet-row').length;
+    label.textContent = isOpen
+      ? `Hide ${n} wallet${n === 1 ? '' : 's'}`
+      : `Show ${n} wallet${n === 1 ? '' : 's'}`;
+  }
+}
+
 async function fetchJSON(url, params = {}) {
   const qs = new URLSearchParams(params).toString();
   const full = qs ? `${url}?${qs}` : url;
@@ -437,9 +537,8 @@ async function runAnalysis() {
     if (!wallets.length) throw new Error('No wallets returned from the leaderboard.');
     setStatus(`Got ${wallets.length} whale wallets. Fetching positions…`);
 
-    const marketWhales   = {};                       // conditionId → Set<address>
-    const marketOutcomes = {};                       // conditionId → { Yes: n, No: n }
-    const marketTitles   = {};
+    // conditionId → { whales: Set<addr>, positions: [{addr, outcome, value, size, price}], title }
+    const markets = {};
     let done = 0;
 
     const tasks = wallets.map(addr => async () => {
@@ -447,24 +546,28 @@ async function runAnalysis() {
       for (const p of positions) {
         const cid = p.conditionId || p.condition_id || p.market || p.marketId;
         if (!cid) continue;
-        if (!marketWhales[cid])   marketWhales[cid]   = new Set();
-        if (!marketOutcomes[cid]) marketOutcomes[cid] = {};
-        marketWhales[cid].add(addr);
+        if (!markets[cid]) markets[cid] = { whales: new Set(), positions: [], title: '' };
+        markets[cid].whales.add(addr);
 
         // Normalize outcome: case-insensitive, fall back to outcomeIndex (0=Yes, 1=No)
         let outcome = (p.outcome || '').toString().trim();
         if (!outcome && typeof p.outcomeIndex === 'number') {
           outcome = p.outcomeIndex === 0 ? 'Yes' : 'No';
         }
-        if (outcome.toLowerCase() === 'yes') outcome = 'Yes';
-        else if (outcome.toLowerCase() === 'no') outcome = 'No';
+        const lc = outcome.toLowerCase();
+        if (lc === 'yes') outcome = 'Yes';
+        else if (lc === 'no') outcome = 'No';
 
-        if (outcome) {
-          marketOutcomes[cid][outcome] = (marketOutcomes[cid][outcome] || 0) + 1;
-        }
+        markets[cid].positions.push({
+          addr,
+          outcome: outcome || null,
+          value: parseFloat(p.currentValue || 0),
+          size:  parseFloat(p.size || 0),
+          price: parseFloat(p.curPrice || p.avgPrice || 0),
+        });
 
-        if (!marketTitles[cid])
-          marketTitles[cid] = p.title || p.question || p.marketQuestion || cid;
+        if (!markets[cid].title)
+          markets[cid].title = p.title || p.question || p.marketQuestion || cid;
       }
     });
 
@@ -474,17 +577,19 @@ async function runAnalysis() {
       setStatus(`Processed ${done} / ${wallets.length} wallets…`);
     });
 
-    const totalPositions = Object.values(marketWhales).reduce((s, w) => s + w.size, 0);
+    const totalPositions = Object.values(markets).reduce((s, m) => s + m.positions.length, 0);
 
     setStatus('Enriching market titles…');
-    const topCids = Object.entries(marketWhales)
-      .sort((a, b) => b[1].size - a[1].size)
+    const titleSeed = {};
+    for (const [cid, m] of Object.entries(markets)) titleSeed[cid] = m.title;
+    const topCids = Object.entries(markets)
+      .sort((a, b) => b[1].whales.size - a[1].whales.size)
       .slice(0, TOP_MARKETS * 2)
       .map(([cid]) => cid);
-    const titles = await enrichTitles(topCids, marketTitles);
+    const titles = await enrichTitles(topCids, titleSeed);
 
-    const ranked = Object.entries(marketWhales)
-      .sort((a, b) => b[1].size - a[1].size)
+    const ranked = Object.entries(markets)
+      .sort((a, b) => b[1].whales.size - a[1].whales.size)
       .slice(0, TOP_MARKETS);
 
     // ── Render ──
@@ -494,7 +599,7 @@ async function runAnalysis() {
     // Summary chips
     document.getElementById('summary-row').innerHTML = [
       { val: wallets.length, lbl: 'Whales scanned' },
-      { val: Object.keys(marketWhales).length, lbl: 'Unique markets' },
+      { val: Object.keys(markets).length, lbl: 'Unique markets' },
       { val: totalPositions, lbl: 'Open positions' },
     ].map(c => `
       <div class="summary-chip">
@@ -508,33 +613,45 @@ async function runAnalysis() {
 
     // Cards — denominator is ALWAYS the scanned wallet count
     const N = wallets.length;
-    document.getElementById('cards').innerHTML = ranked.map(([cid, whaleSet], i) => {
+    document.getElementById('cards').innerHTML = ranked.map(([cid, m], i) => {
       const title      = titles[cid] || cid;
-      const oc         = marketOutcomes[cid] || {};
-      const yesN       = oc['Yes'] || 0;
-      const noN        = oc['No']  || 0;
-      const inMarket   = whaleSet.size;
+      const inMarket   = m.whales.size;
       const sittingOut = N - inMarket;
       const pctOfAll   = (100 * inMarket / N).toFixed(1);
 
-      // Find dominant outcome across ALL outcomes (handles non-binary markets too)
-      const outcomeEntries = Object.entries(oc).sort((a, b) => b[1] - a[1]);
-      const totalVotes     = outcomeEntries.reduce((s, [, n]) => s + n, 0);
-      const topOutcome     = outcomeEntries[0]?.[0];
-      const topCount       = outcomeEntries[0]?.[1] || 0;
-      const isBinary       = outcomeEntries.length <= 2 &&
-                             outcomeEntries.every(([k]) => k === 'Yes' || k === 'No');
+      // Roll positions up to net per-wallet direction (handles hedges)
+      const byWallet = {};  // addr → { yes: $value, no: $value, totalValue, picks: Set, positions:[] }
+      for (const p of m.positions) {
+        if (!byWallet[p.addr]) byWallet[p.addr] = { yes: 0, no: 0, totalValue: 0, picks: new Set(), positions: [] };
+        const w = byWallet[p.addr];
+        w.positions.push(p);
+        w.totalValue += p.value;
+        if (p.outcome === 'Yes') w.yes += p.value;
+        else if (p.outcome === 'No') w.no += p.value;
+        if (p.outcome) w.picks.add(p.outcome);
+      }
+
+      // Per-whale net direction
+      const whaleRows = Object.entries(byWallet).map(([addr, w]) => {
+        let pick = null;
+        if (w.yes > w.no)      pick = 'Yes';
+        else if (w.no > w.yes) pick = 'No';
+        else if (w.picks.size === 1) pick = [...w.picks][0]; // non-binary outcome
+        return { addr, pick, value: w.totalValue, isHedge: w.yes > 0 && w.no > 0 };
+      }).sort((a, b) => b.value - a.value);
+
+      const yesN = whaleRows.filter(r => r.pick === 'Yes').length;
+      const noN  = whaleRows.filter(r => r.pick === 'No').length;
+      const otherEntries = whaleRows.filter(r => r.pick && r.pick !== 'Yes' && r.pick !== 'No');
+      const totalVotes   = yesN + noN + otherEntries.length;
 
       let badge, barYesPct, splitText;
-
       if (totalVotes === 0) {
-        // No outcome data came back from the API for these positions
-        badge      = `<span class="bet-badge bet-unknown">No data</span>`;
-        barYesPct  = 0;
-        splitText  = '—';
-      } else if (isBinary) {
-        const tied = yesN === noN;
-        if (tied) {
+        badge     = `<span class="bet-badge bet-unknown">No data</span>`;
+        barYesPct = 0;
+        splitText = '—';
+      } else if (otherEntries.length === 0) {
+        if (yesN === noN) {
           badge = `<span class="bet-badge bet-split">TIE ${yesN}/${noN}</span>`;
         } else if (yesN > noN) {
           badge = `<span class="bet-badge bet-yes">YES ${yesN}/${inMarket}</span>`;
@@ -544,18 +661,39 @@ async function runAnalysis() {
         barYesPct = totalVotes ? yesN / totalVotes : 0.5;
         splitText = `${yesN}Y&nbsp;/&nbsp;${noN}N`;
       } else {
-        // Multi-outcome market (e.g. "Biden 32 / Trump 18 / Other 5")
-        const label = escHtml(topOutcome || '?');
-        badge = `<span class="bet-badge bet-yes">${label} ${topCount}/${inMarket}</span>`;
-        barYesPct = totalVotes ? topCount / totalVotes : 0;
-        // Show top two outcomes in split text
-        splitText = outcomeEntries.slice(0, 3)
-          .map(([k, v]) => `${escHtml(k)}&nbsp;${v}`)
-          .join('&nbsp;/&nbsp;');
+        // Multi-outcome market: tally by pick label
+        const tally = {};
+        for (const r of whaleRows) if (r.pick) tally[r.pick] = (tally[r.pick] || 0) + 1;
+        const top = Object.entries(tally).sort((a, b) => b[1] - a[1]);
+        const [label, count] = top[0];
+        badge = `<span class="bet-badge bet-yes">${escHtml(label)} ${count}/${inMarket}</span>`;
+        barYesPct = totalVotes ? count / totalVotes : 0;
+        splitText = top.slice(0, 3).map(([k, v]) => `${escHtml(k)}&nbsp;${v}`).join('&nbsp;/&nbsp;');
       }
 
+      // Build the per-wallet detail list (sorted by position size desc)
+      const detailRows = whaleRows.map(r => {
+        const shortAddr = `${r.addr.slice(0, 6)}…${r.addr.slice(-4)}`;
+        let pickCls = 'un', pickTxt = '?';
+        if (r.isHedge)       { pickCls = 'un';  pickTxt = 'HEDGE'; }
+        else if (r.pick === 'Yes') { pickCls = 'yes'; pickTxt = 'YES'; }
+        else if (r.pick === 'No')  { pickCls = 'no';  pickTxt = 'NO'; }
+        else if (r.pick)     { pickCls = 'yes'; pickTxt = r.pick.toUpperCase().slice(0, 6); }
+        const valStr = r.value >= 1000
+          ? `$${(r.value/1000).toFixed(1)}k`
+          : `$${r.value.toFixed(0)}`;
+        return `
+          <a class="wallet-row" href="https://polymarket.com/profile/${r.addr}" target="_blank" rel="noopener">
+            <span class="wallet-addr">${shortAddr}</span>
+            <span class="wallet-pick ${pickCls}">${pickTxt}</span>
+            <span class="wallet-value">${valStr}</span>
+          </a>`;
+      }).join('');
+
+      const togglePrompt = `Show ${whaleRows.length} wallet${whaleRows.length === 1 ? '' : 's'}`;
+
       return `
-        <div class="card">
+        <div class="card" id="card-${i}">
           <div class="card-header">
             <span class="rank">#${i + 1}</span>
             <span class="question">${escHtml(title)}</span>
@@ -573,6 +711,14 @@ async function runAnalysis() {
               <div class="bar-no"  style="width:${((1-barYesPct)*100).toFixed(1)}%"></div>
             </div>
             <span class="split-label">${splitText}</span>
+          </div>
+          <div class="toggle-row" onclick="toggleCard(${i})">
+            <span class="chev">▾</span>
+            <span class="toggle-label">${togglePrompt}</span>
+          </div>
+          <div class="wallet-list">
+            ${detailRows}
+            <div class="wallet-hint">Tap any address to open on Polymarket and verify</div>
           </div>
         </div>`;
     }).join('');
