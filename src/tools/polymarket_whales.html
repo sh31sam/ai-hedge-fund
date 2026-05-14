@@ -11,6 +11,7 @@
     --border: #2a2a2a;
     --accent: #00e5a0;
     --red: #ff4d6d;
+    --amber: #e5c300;
     --muted: #555;
     --text: #e8e8e8;
     --sub: #888;
@@ -31,12 +32,50 @@
     display: flex;
     align-items: center;
     justify-content: space-between;
-    padding: 12px 0 20px;
+    padding: 12px 0 18px;
     border-bottom: 1px solid var(--border);
-    margin-bottom: 20px;
+    margin-bottom: 18px;
   }
   header h1 { font-size: 1.1rem; font-weight: 700; letter-spacing: -0.3px; }
   header span { font-size: 0.78rem; color: var(--sub); }
+
+  /* ── Controls ─────────────────────────────────────────────────────────── */
+  .controls {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    gap: 8px;
+    margin-bottom: 14px;
+  }
+  .ctrl {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 8px 10px;
+  }
+  .ctrl-label {
+    display: block;
+    font-size: 0.62rem;
+    font-weight: 700;
+    color: var(--sub);
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    margin-bottom: 4px;
+  }
+  .ctrl select {
+    width: 100%;
+    border: none;
+    background: transparent;
+    color: var(--text);
+    font-size: 0.92rem;
+    font-weight: 600;
+    appearance: none;
+    -webkit-appearance: none;
+    padding-right: 16px;
+    background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'><path fill='%23888' d='M5 6L0 0h10z'/></svg>");
+    background-repeat: no-repeat;
+    background-position: right 0 center;
+  }
+  .ctrl select:focus { outline: none; }
 
   #run-btn {
     display: block;
@@ -50,7 +89,7 @@
     font-weight: 700;
     cursor: pointer;
     transition: opacity 0.15s;
-    margin-bottom: 20px;
+    margin-bottom: 16px;
     -webkit-tap-highlight-color: transparent;
   }
   #run-btn:disabled { opacity: 0.45; cursor: default; }
@@ -59,7 +98,7 @@
   #status {
     font-size: 0.82rem;
     color: var(--sub);
-    margin-bottom: 16px;
+    margin-bottom: 12px;
     min-height: 1.2em;
     text-align: center;
   }
@@ -68,7 +107,7 @@
     height: 3px;
     background: var(--border);
     border-radius: 2px;
-    margin-bottom: 20px;
+    margin-bottom: 18px;
     overflow: hidden;
     display: none;
   }
@@ -89,6 +128,33 @@
     margin-bottom: 10px;
   }
 
+  /* ── Summary chips ────────────────────────────────────────────────────── */
+  .summary-row {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 18px;
+  }
+  .summary-chip {
+    flex: 1;
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 10px 8px;
+    text-align: center;
+  }
+  .summary-chip .val { font-size: 1.15rem; font-weight: 800; color: var(--accent); }
+  .summary-chip .lbl { font-size: 0.66rem; color: var(--sub); margin-top: 2px; }
+
+  .scan-meta {
+    font-size: 0.72rem;
+    color: var(--sub);
+    text-align: center;
+    margin-bottom: 14px;
+    line-height: 1.4;
+  }
+  .scan-meta strong { color: var(--text); }
+
+  /* ── Cards ────────────────────────────────────────────────────────────── */
   .card {
     background: var(--card);
     border: 1px solid var(--border);
@@ -108,7 +174,7 @@
     font-size: 0.72rem;
     font-weight: 700;
     color: var(--sub);
-    min-width: 20px;
+    min-width: 22px;
     padding-top: 2px;
   }
   .question {
@@ -126,21 +192,23 @@
     text-align: right;
   }
 
-  .card-meta {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    margin-bottom: 8px;
+  .convergence-line {
+    font-size: 0.76rem;
+    color: var(--sub);
+    margin-bottom: 10px;
+    line-height: 1.4;
   }
+  .convergence-line .num { color: var(--text); font-weight: 700; }
   .pct-badge {
-    font-size: 0.72rem;
+    display: inline-block;
+    font-size: 0.7rem;
     background: #1a2e24;
     color: var(--accent);
-    padding: 2px 8px;
+    padding: 1px 8px;
     border-radius: 99px;
-    font-weight: 600;
+    font-weight: 700;
+    margin-right: 4px;
   }
-  .whale-label { font-size: 0.72rem; color: var(--sub); }
 
   .bet-row {
     display: flex;
@@ -148,16 +216,17 @@
     gap: 10px;
   }
   .bet-badge {
-    font-size: 0.78rem;
+    font-size: 0.76rem;
     font-weight: 800;
-    padding: 3px 10px;
+    padding: 4px 9px;
     border-radius: 8px;
-    min-width: 46px;
+    min-width: 64px;
     text-align: center;
+    white-space: nowrap;
   }
-  .bet-yes { background: #0d2e1e; color: #00e5a0; }
-  .bet-no  { background: #2e0d15; color: #ff4d6d; }
-  .bet-split { background: #1e1e0d; color: #e5c300; }
+  .bet-yes   { background: #0d2e1e; color: var(--accent); }
+  .bet-no    { background: #2e0d15; color: var(--red); }
+  .bet-split { background: #2a2510; color: var(--amber); }
 
   .bar-wrap {
     flex: 1;
@@ -181,23 +250,8 @@
     color: #ff8099;
     line-height: 1.5;
     display: none;
+    margin-bottom: 14px;
   }
-
-  .summary-row {
-    display: flex;
-    gap: 8px;
-    margin-bottom: 20px;
-  }
-  .summary-chip {
-    flex: 1;
-    background: var(--card);
-    border: 1px solid var(--border);
-    border-radius: 10px;
-    padding: 10px 12px;
-    text-align: center;
-  }
-  .summary-chip .val { font-size: 1.2rem; font-weight: 800; color: var(--accent); }
-  .summary-chip .lbl { font-size: 0.68rem; color: var(--sub); margin-top: 2px; }
 
   #results { display: none; }
 
@@ -205,7 +259,7 @@
     text-align: center;
     font-size: 0.7rem;
     color: var(--muted);
-    margin-top: 28px;
+    margin-top: 24px;
     padding-bottom: 8px;
   }
 </style>
@@ -215,9 +269,37 @@
 <header>
   <div>
     <h1>🐳 Whale Tracker</h1>
-    <span>Polymarket · Weekly Top 100</span>
+    <span id="header-sub">Polymarket convergence</span>
   </div>
 </header>
+
+<!-- Controls -->
+<div class="controls">
+  <label class="ctrl">
+    <span class="ctrl-label">Window</span>
+    <select id="ctrl-window">
+      <option value="DAY">Today</option>
+      <option value="WEEK" selected>This week</option>
+      <option value="MONTH">This month</option>
+      <option value="ALL">All-time</option>
+    </select>
+  </label>
+  <label class="ctrl">
+    <span class="ctrl-label">Rank by</span>
+    <select id="ctrl-order">
+      <option value="PNL" selected>Profit</option>
+      <option value="VOLUME">Volume</option>
+    </select>
+  </label>
+  <label class="ctrl">
+    <span class="ctrl-label"># Wallets</span>
+    <select id="ctrl-n">
+      <option value="50">50</option>
+      <option value="100" selected>100</option>
+      <option value="200">200</option>
+    </select>
+  </label>
+</div>
 
 <button id="run-btn" onclick="runAnalysis()">Find Whale Convergence</button>
 
@@ -230,6 +312,7 @@
 
 <div id="results">
   <div class="summary-row" id="summary-row"></div>
+  <div class="scan-meta" id="scan-meta"></div>
   <div class="section-label">Top 10 Markets by Whale Overlap</div>
   <div id="cards"></div>
 </div>
@@ -241,14 +324,14 @@
 const LEADERBOARD_URL = 'https://data-api.polymarket.com/v1/leaderboard';
 const POSITIONS_URL   = 'https://data-api.polymarket.com/positions';
 const GAMMA_URL       = 'https://gamma-api.polymarket.com/markets';
-const TOP_WALLETS     = 100;
 const TOP_MARKETS     = 10;
-const CONCURRENCY     = 8;   // parallel position fetches
+const CONCURRENCY     = 8;
 
-// ─── Helpers ───────────────────────────────────────────────────────────────
-function setStatus(msg) {
-  document.getElementById('status').textContent = msg;
-}
+const WINDOW_LABEL = { DAY: 'today', WEEK: 'this week', MONTH: 'this month', ALL: 'all-time' };
+const ORDER_LABEL  = { PNL: 'profit', VOLUME: 'volume' };
+
+// ─── UI helpers ────────────────────────────────────────────────────────────
+function setStatus(msg) { document.getElementById('status').textContent = msg; }
 function setProgress(done, total) {
   const pct = total ? (done / total * 100) : 0;
   document.getElementById('prog-bar').style.width = pct + '%';
@@ -258,8 +341,10 @@ function showError(msg) {
   el.style.display = 'block';
   el.innerHTML = `<strong>Error</strong><br>${msg}`;
 }
-function hideError() {
-  document.getElementById('error-box').style.display = 'none';
+function hideError() { document.getElementById('error-box').style.display = 'none'; }
+
+function escHtml(s) {
+  return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 }
 
 async function fetchJSON(url, params = {}) {
@@ -270,7 +355,6 @@ async function fetchJSON(url, params = {}) {
   return res.json();
 }
 
-// Run up to `limit` promises concurrently
 async function pool(tasks, limit, onDone) {
   const results = new Array(tasks.length);
   let idx = 0;
@@ -281,20 +365,17 @@ async function pool(tasks, limit, onDone) {
       onDone(i);
     }
   }
-  const workers = Array.from({ length: Math.min(limit, tasks.length) }, worker);
-  await Promise.all(workers);
+  await Promise.all(Array.from({ length: Math.min(limit, tasks.length) }, worker));
   return results;
 }
 
 // ─── Leaderboard (paginated, max 50/page) ──────────────────────────────────
-async function fetchLeaderboard(total = 100) {
+async function fetchLeaderboard(total, timePeriod, orderBy) {
   const wallets = [];
   let offset = 0;
   while (wallets.length < total) {
     const limit = Math.min(50, total - wallets.length);
-    const data = await fetchJSON(LEADERBOARD_URL, {
-      timePeriod: 'WEEK', orderBy: 'PNL', limit, offset
-    });
+    const data = await fetchJSON(LEADERBOARD_URL, { timePeriod, orderBy, limit, offset });
     const rows = Array.isArray(data) ? data : (data.data || []);
     if (!rows.length) break;
     for (const r of rows) {
@@ -307,7 +388,6 @@ async function fetchLeaderboard(total = 100) {
   return wallets.slice(0, total);
 }
 
-// ─── Positions for one wallet ───────────────────────────────────────────────
 async function fetchPositions(address) {
   try {
     const data = await fetchJSON(POSITIONS_URL, {
@@ -319,7 +399,6 @@ async function fetchPositions(address) {
   } catch { return []; }
 }
 
-// ─── Gamma title enrichment ─────────────────────────────────────────────────
 async function enrichTitles(conditionIds, existing) {
   const missing = conditionIds.filter(id => existing[id] === id || !existing[id]);
   if (!missing.length) return existing;
@@ -347,17 +426,19 @@ async function runAnalysis() {
   document.getElementById('prog-wrap').style.display = 'block';
   setProgress(0, 1);
 
+  const timePeriod = document.getElementById('ctrl-window').value;
+  const orderBy    = document.getElementById('ctrl-order').value;
+  const topN       = parseInt(document.getElementById('ctrl-n').value, 10);
+
   try {
-    // Step 1: leaderboard
-    setStatus('Fetching top 100 weekly-profit wallets…');
-    const wallets = await fetchLeaderboard(TOP_WALLETS);
-    if (!wallets.length) throw new Error('No wallets returned from leaderboard.');
+    setStatus(`Fetching top ${topN} wallets by ${ORDER_LABEL[orderBy]} (${WINDOW_LABEL[timePeriod]})…`);
+    const wallets = await fetchLeaderboard(topN, timePeriod, orderBy);
+    if (!wallets.length) throw new Error('No wallets returned from the leaderboard.');
     setStatus(`Got ${wallets.length} whale wallets. Fetching positions…`);
 
-    // Step 2: positions (pooled)
-    const marketWhales  = {};   // conditionId → Set of addresses
-    const marketOutcomes = {};  // conditionId → { Yes: N, No: N }
-    const marketTitles   = {};  // conditionId → title string
+    const marketWhales   = {};                       // conditionId → Set<address>
+    const marketOutcomes = {};                       // conditionId → { Yes: n, No: n }
+    const marketTitles   = {};
     let done = 0;
 
     const tasks = wallets.map(addr => async () => {
@@ -366,10 +447,12 @@ async function runAnalysis() {
         const cid = p.conditionId || p.condition_id || p.market || p.marketId;
         if (!cid) continue;
         if (!marketWhales[cid])   marketWhales[cid]   = new Set();
-        if (!marketOutcomes[cid]) marketOutcomes[cid] = { Yes: 0, No: 0, Other: 0 };
+        if (!marketOutcomes[cid]) marketOutcomes[cid] = { Yes: 0, No: 0 };
         marketWhales[cid].add(addr);
         const outcome = p.outcome || 'Other';
-        marketOutcomes[cid][outcome] = (marketOutcomes[cid][outcome] || 0) + 1;
+        if (outcome === 'Yes' || outcome === 'No') {
+          marketOutcomes[cid][outcome]++;
+        }
         if (!marketTitles[cid])
           marketTitles[cid] = p.title || p.question || p.marketQuestion || cid;
       }
@@ -383,7 +466,6 @@ async function runAnalysis() {
 
     const totalPositions = Object.values(marketWhales).reduce((s, w) => s + w.size, 0);
 
-    // Step 3: enrich titles
     setStatus('Enriching market titles…');
     const topCids = Object.entries(marketWhales)
       .sort((a, b) => b[1].size - a[1].size)
@@ -391,7 +473,6 @@ async function runAnalysis() {
       .map(([cid]) => cid);
     const titles = await enrichTitles(topCids, marketTitles);
 
-    // Step 4: rank
     const ranked = Object.entries(marketWhales)
       .sort((a, b) => b[1].size - a[1].size)
       .slice(0, TOP_MARKETS);
@@ -411,40 +492,54 @@ async function runAnalysis() {
         <div class="lbl">${c.lbl}</div>
       </div>`).join('');
 
-    // Cards
+    document.getElementById('scan-meta').innerHTML =
+      `Ranked top <strong>${wallets.length}</strong> wallets by <strong>${ORDER_LABEL[orderBy]}</strong> ` +
+      `(${WINDOW_LABEL[timePeriod]}). Convergence below is measured across all ${wallets.length}.`;
+
+    // Cards — denominator is ALWAYS the scanned wallet count
+    const N = wallets.length;
     document.getElementById('cards').innerHTML = ranked.map(([cid, whaleSet], i) => {
-      const title   = titles[cid] || cid;
-      const oc      = marketOutcomes[cid] || {};
-      const yesN    = oc.Yes || 0;
-      const noN     = oc.No  || 0;
-      const total   = yesN + noN;
-      const yesPct  = total ? yesN / total : 0.5;
-      const dominant = yesN >= noN ? 'YES' : 'NO';
-      const domCount = yesN >= noN ? yesN : noN;
-      const betClass = yesN > noN ? 'bet-yes' : yesN < noN ? 'bet-no' : 'bet-split';
-      const pct = (100 * whaleSet.size / wallets.length).toFixed(1);
+      const title    = titles[cid] || cid;
+      const oc       = marketOutcomes[cid] || { Yes: 0, No: 0 };
+      const yesN     = oc.Yes;
+      const noN      = oc.No;
+      const inMarket = whaleSet.size;
+      const sittingOut = N - inMarket;
+      const total    = yesN + noN || inMarket;  // fall back if outcome missing
+      const yesPct   = total ? yesN / total : 0.5;
+      const pctOfAll = (100 * inMarket / N).toFixed(1);
+
+      let badge;
+      if (yesN > noN)        badge = `<span class="bet-badge bet-yes">YES ${yesN}/${inMarket}</span>`;
+      else if (noN > yesN)   badge = `<span class="bet-badge bet-no">NO ${noN}/${inMarket}</span>`;
+      else                   badge = `<span class="bet-badge bet-split">SPLIT ${yesN}/${noN}</span>`;
 
       return `
-      <div class="card">
-        <div class="card-header">
-          <span class="rank">#${i + 1}</span>
-          <span class="question">${escHtml(title)}</span>
-          <span class="whale-count">${whaleSet.size}</span>
-        </div>
-        <div class="card-meta">
-          <span class="pct-badge">${pct}% of whales</span>
-          <span class="whale-label">🐳 ${whaleSet.size} of ${wallets.length}</span>
-        </div>
-        <div class="bet-row">
-          <span class="bet-badge ${betClass}">${dominant} ${domCount}/${total}</span>
-          <div class="bar-wrap">
-            <div class="bar-yes" style="width:${(yesPct*100).toFixed(1)}%"></div>
-            <div class="bar-no"  style="width:${((1-yesPct)*100).toFixed(1)}%"></div>
+        <div class="card">
+          <div class="card-header">
+            <span class="rank">#${i + 1}</span>
+            <span class="question">${escHtml(title)}</span>
+            <span class="whale-count">${inMarket}</span>
           </div>
-          <span class="split-label">${yesN}Y&nbsp;/&nbsp;${noN}N</span>
-        </div>
-      </div>`;
+          <div class="convergence-line">
+            <span class="pct-badge">${pctOfAll}%</span>
+            <span class="num">${inMarket}</span> of <span class="num">${N}</span> scanned whales bet here
+            · <span class="num">${sittingOut}</span> sat it out
+          </div>
+          <div class="bet-row">
+            ${badge}
+            <div class="bar-wrap">
+              <div class="bar-yes" style="width:${(yesPct*100).toFixed(1)}%"></div>
+              <div class="bar-no"  style="width:${((1-yesPct)*100).toFixed(1)}%"></div>
+            </div>
+            <span class="split-label">${yesN}Y&nbsp;/&nbsp;${noN}N</span>
+          </div>
+        </div>`;
     }).join('');
+
+    // Header subtitle reflects the active query
+    document.getElementById('header-sub').textContent =
+      `Top ${N} by ${ORDER_LABEL[orderBy]} · ${WINDOW_LABEL[timePeriod]}`;
 
     document.getElementById('results').style.display = 'block';
 
@@ -455,13 +550,6 @@ async function runAnalysis() {
   } finally {
     btn.disabled = false;
   }
-}
-
-function escHtml(s) {
-  return String(s)
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;');
 }
 </script>
 </body>
