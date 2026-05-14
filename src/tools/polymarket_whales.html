@@ -289,6 +289,14 @@
   }
   .wallet-row + .wallet-row { border-top: 1px solid #202020; }
   .wallet-row:active { background: #1a1a1a; }
+  .wallet-arrow {
+    color: var(--accent);
+    font-size: 1rem;
+    font-weight: 700;
+    align-self: center;
+    flex-shrink: 0;
+    margin-left: 4px;
+  }
 
   .wallet-info {
     flex: 1;
@@ -909,6 +917,7 @@ async function runAnalysis() {
               <div class="bet-tags">${tags}</div>
             </div>
             <span class="wallet-total">${totalValStr}</span>
+            <span class="wallet-arrow">↗</span>
           </a>`;
       }).join('');
 

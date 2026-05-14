@@ -335,10 +335,20 @@
     display: flex;
     flex-direction: column;
     gap: 4px;
-    padding: 10px 14px;
+    padding: 12px 14px;
     border-top: 1px solid var(--border);
+    text-decoration: none;
+    color: var(--text);
+    -webkit-tap-highlight-color: rgba(0,229,160,0.12);
   }
   .wallet-row:first-child { border-top: none; }
+  .wallet-row:active { background: var(--card2); }
+  .wallet-arrow {
+    color: var(--accent);
+    font-size: 1rem;
+    font-weight: 700;
+    flex-shrink: 0;
+  }
   .wallet-main {
     display: flex;
     align-items: center;
@@ -1060,14 +1070,15 @@ async function runAnalysis() {
           return `<span class="bet-tag ${cls}">${escHtml(display)}</span>`;
         }).filter(Boolean).join('');
         return `
-          <div class="wallet-row">
+          <a class="wallet-row" href="${escHtml(polyUrl)}" target="_blank" rel="noopener noreferrer">
             <div class="wallet-main">
-              <span class="wallet-addr"><a href="${escHtml(polyUrl)}" target="_blank">${shortAddr}</a></span>
+              <span class="wallet-addr">${shortAddr}</span>
               <span class="wallet-val">${fmtVal(w.value)}</span>
               ${pickTagHtml}
+              <span class="wallet-arrow">↗</span>
             </div>
             ${tags ? `<div class="bet-tags">${tags}</div>` : ''}
-          </div>`;
+          </a>`;
       }).join('');
 
       return `
