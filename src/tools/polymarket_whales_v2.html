@@ -89,6 +89,19 @@
   }
   .api-key-hint a { color: var(--accent); text-decoration: none; }
 
+  .window-hint {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 10px 12px;
+    font-size: 0.72rem;
+    color: var(--sub);
+    line-height: 1.5;
+    margin-bottom: 14px;
+  }
+  .window-hint strong { color: var(--text); }
+  .window-hint em { color: var(--accent); font-style: normal; }
+
   #run-btn {
     display: block;
     width: 100%;
@@ -439,12 +452,12 @@
 <!-- Controls row 1 -->
 <div class="controls" style="grid-template-columns:1fr 1fr;">
   <label class="ctrl">
-    <span class="ctrl-label">Window</span>
+    <span class="ctrl-label">Profit Window</span>
     <select id="ctrl-window">
-      <option value="DAY">Today</option>
-      <option value="WEEK" selected>This week</option>
-      <option value="MONTH">This month</option>
-      <option value="ALL">All-time</option>
+      <option value="DAY">Today's biggest earners</option>
+      <option value="WEEK" selected>This week's biggest earners</option>
+      <option value="MONTH">This month's biggest earners</option>
+      <option value="ALL">All-time biggest earners</option>
     </select>
   </label>
   <label class="ctrl">
@@ -455,6 +468,12 @@
       <option value="200">200</option>
     </select>
   </label>
+</div>
+
+<div class="window-hint">
+  <strong>Profit Window</strong> ranks the top wallets by <em>profit earned during that period</em>.
+  e.g. <strong>This week</strong> = top earners this past week (recent hot streaks).
+  <strong>All-time</strong> = top lifetime profit (legacy whales — same set every time).
 </div>
 
 <!-- Controls row 2 -->
@@ -473,6 +492,29 @@
     <select id="ctrl-sort">
       <option value="whales">Most Whales</option>
       <option value="edge">Biggest Edge</option>
+    </select>
+  </label>
+</div>
+
+<!-- Controls row 3: market category + subcategory -->
+<div class="controls" style="grid-template-columns:1fr 1fr;">
+  <label class="ctrl">
+    <span class="ctrl-label">Category</span>
+    <select id="ctrl-category" onchange="onCategoryChange()">
+      <option value="">All markets</option>
+      <option value="sports">🏆 Sports</option>
+      <option value="politics">🗳 Politics</option>
+      <option value="crypto">🪙 Crypto</option>
+      <option value="economics">📈 Economics</option>
+      <option value="tech">💻 Tech</option>
+      <option value="culture">🎭 Culture</option>
+      <option value="weather">🌦 Weather</option>
+    </select>
+  </label>
+  <label class="ctrl">
+    <span class="ctrl-label">Subcategory</span>
+    <select id="ctrl-subcategory" disabled>
+      <option value="">All</option>
     </select>
   </label>
 </div>
@@ -543,6 +585,92 @@ const SPORT_PATTERNS = [
 ];
 
 const STOP_WORDS = new Set(['the', 'will', 'win', 'who', 'vs', 'at', 'in', 'on', 'of', 'to', 'a', 'an', 'and', 'or', 'by', 'for', 'with', 'their', 'be', 'is', 'are', 'was', 'were', 'this', 'that', 'from', 'have', 'has']);
+
+// ─── Category keyword aliases (broad parent-category match) ─────────────────
+const CATEGORY_ALIASES = {
+  sports:    ['sports', 'mlb', 'nba', 'nfl', 'nhl', 'soccer', 'tennis', 'ufc', 'mma', 'boxing', 'esports', 'f1', 'golf', 'cricket'],
+  politics:  ['politics', 'election', 'president', 'congress', 'senate', 'trump', 'biden', 'gop', 'democrat'],
+  crypto:    ['crypto', 'bitcoin', 'btc', 'eth', 'ethereum', 'solana', 'doge', 'memecoin'],
+  economics: ['economics', 'economy', 'fed', 'interest', 'recession', 'inflation', 'gdp', 'unemployment', 'jobs'],
+  tech:      ['tech', 'ai', 'openai', 'apple', 'google', 'tesla', 'nvidia', 'meta'],
+  culture:   ['culture', 'movies', 'music', 'celebrity', 'awards', 'oscars', 'grammys', 'tv'],
+  weather:   ['weather', 'hurricane', 'storm', 'climate', 'temperature'],
+};
+
+// ─── Subcategory keyword sets ────────────────────────────────────────────────
+const SUBCATEGORIES = {
+  sports: [
+    { value: 'mlb',    label: '⚾ MLB',    kws: ['mlb', 'baseball', 'yankees', 'dodgers', 'mets', 'red sox', 'astros', 'cubs', 'braves', 'marlins', 'twins', 'rays', 'orioles'] },
+    { value: 'nba',    label: '🏀 NBA',    kws: ['nba', 'basketball', 'lakers', 'celtics', 'warriors', 'knicks', 'heat', 'bulls'] },
+    { value: 'nfl',    label: '🏈 NFL',    kws: ['nfl', 'football', 'super bowl', 'cowboys', 'patriots', 'chiefs', 'eagles', '49ers'] },
+    { value: 'nhl',    label: '🏒 NHL',    kws: ['nhl', 'hockey', 'rangers', 'maple leafs', 'oilers'] },
+    { value: 'soccer', label: '⚽ Soccer', kws: ['soccer', 'football club', 'premier league', 'champions league', 'la liga', 'world cup', 'mls', 'epl'] },
+    { value: 'ufc',    label: '🥋 UFC/MMA',kws: ['ufc', 'mma', 'mixed martial', 'boxing'] },
+    { value: 'tennis', label: '🎾 Tennis', kws: ['tennis', 'wimbledon', 'us open', 'french open', 'atp', 'wta'] },
+    { value: 'f1',     label: '🏎 F1',     kws: ['f1', 'formula 1', 'grand prix', 'verstappen', 'hamilton'] },
+    { value: 'golf',   label: '⛳ Golf',   kws: ['golf', 'pga', 'masters', 'tiger', 'rory'] },
+  ],
+  politics: [
+    { value: 'us-election', label: '🇺🇸 US Elections', kws: ['president', 'election', 'gop', 'democrat', 'primary', 'caucus', 'electoral'] },
+    { value: 'trump',       label: '👤 Trump',         kws: ['trump'] },
+    { value: 'congress',    label: '🏛 Congress',      kws: ['congress', 'senate', 'house', 'speaker'] },
+    { value: 'world',       label: '🌍 World',         kws: ['ukraine', 'russia', 'china', 'taiwan', 'iran', 'israel', 'gaza', 'putin', 'xi'] },
+  ],
+  crypto: [
+    { value: 'bitcoin',  label: '₿ Bitcoin',  kws: ['bitcoin', 'btc'] },
+    { value: 'ethereum', label: 'Ξ Ethereum', kws: ['ethereum', 'eth', 'ether'] },
+    { value: 'solana',   label: '◎ Solana',   kws: ['solana', 'sol'] },
+    { value: 'memecoin', label: '🐶 Memecoins',kws: ['doge', 'shib', 'pepe', 'memecoin', 'meme coin', 'wif', 'bonk'] },
+  ],
+  economics: [
+    { value: 'fed',       label: '🏦 Fed Rates',  kws: ['fed', 'interest rate', 'rate cut', 'rate hike', 'fomc', 'powell'] },
+    { value: 'recession', label: '📉 Recession',  kws: ['recession', 'gdp', 'downturn'] },
+    { value: 'inflation', label: '💸 Inflation',  kws: ['inflation', 'cpi', 'ppi'] },
+    { value: 'jobs',      label: '💼 Jobs',       kws: ['unemployment', 'jobs report', 'payroll', 'labor'] },
+  ],
+  tech: [
+    { value: 'ai',     label: '🤖 AI',     kws: ['ai', 'artificial intelligence', 'agi', 'openai', 'anthropic', 'claude', 'gpt', 'gemini'] },
+    { value: 'apple',  label: '🍎 Apple',  kws: ['apple', 'iphone'] },
+    { value: 'tesla',  label: '🚗 Tesla',  kws: ['tesla', 'musk', 'cybertruck'] },
+    { value: 'nvidia', label: '💚 Nvidia', kws: ['nvidia', 'gpu'] },
+  ],
+  culture: [
+    { value: 'movies', label: '🎬 Movies', kws: ['movie', 'film', 'box office', 'oscar'] },
+    { value: 'music',  label: '🎵 Music',  kws: ['music', 'grammy', 'album', 'taylor swift', 'drake'] },
+    { value: 'awards', label: '🏆 Awards', kws: ['oscar', 'grammy', 'emmy', 'award'] },
+  ],
+  weather: [
+    { value: 'hurricane',   label: '🌀 Hurricane',   kws: ['hurricane', 'tropical storm', 'cyclone'] },
+    { value: 'temperature', label: '🌡 Temperature', kws: ['temperature', 'hottest', 'coldest', 'heatwave'] },
+  ],
+};
+
+function matchesCategory(blob, selectedCat, selectedSub) {
+  if (!selectedCat && !selectedSub) return true;
+  if (!blob) return false;
+  if (selectedSub) {
+    const subList = SUBCATEGORIES[selectedCat] || [];
+    const sub = subList.find(s => s.value === selectedSub);
+    if (sub) return sub.kws.some(kw => blob.includes(kw));
+  }
+  const aliases = CATEGORY_ALIASES[selectedCat] || [selectedCat];
+  return aliases.some(a => blob.includes(a));
+}
+
+function onCategoryChange() {
+  const cat = document.getElementById('ctrl-category').value;
+  const sub = document.getElementById('ctrl-subcategory');
+  sub.innerHTML = '<option value="">All</option>';
+  const list = SUBCATEGORIES[cat] || [];
+  if (!cat || list.length === 0) { sub.disabled = true; return; }
+  sub.disabled = false;
+  for (const item of list) {
+    const opt = document.createElement('option');
+    opt.value = item.value;
+    opt.textContent = item.label;
+    sub.appendChild(opt);
+  }
+}
 
 // ─── UI helpers ─────────────────────────────────────────────────────────────
 function setStatus(msg)   { document.getElementById('status').textContent = msg; }
@@ -792,7 +920,18 @@ async function runAnalysis() {
   const topN        = parseInt(document.getElementById('ctrl-n').value, 10);
   const minWhales   = parseInt(document.getElementById('ctrl-min-whales').value, 10);
   const sortMode    = document.getElementById('ctrl-sort').value;
+  const category    = document.getElementById('ctrl-category').value;
+  const subcategory = document.getElementById('ctrl-subcategory').value;
   const apiKey      = document.getElementById('odds-key').value.trim();
+
+  let filterLabel = '';
+  if (subcategory) {
+    const subList = SUBCATEGORIES[category] || [];
+    const sub = subList.find(s => s.value === subcategory);
+    filterLabel = sub ? sub.label : subcategory;
+  } else if (category) {
+    filterLabel = category;
+  }
 
   // Persist API key
   if (apiKey) { try { localStorage.setItem('odds_api_key', apiKey); } catch {} }
@@ -849,8 +988,17 @@ async function runAnalysis() {
     setStatus('Enriching Polymarket data…');
     const seedTitles = {};
     for (const [cid, m] of qualified) seedTitles[cid] = m.title;
-    const topCids = qualified.sort((a,b) => b[1].whales.size - a[1].whales.size).slice(0, TOP_MARKETS * 3).map(([cid]) => cid);
-    const { titles, blobs, polyProbs, outcomes } = await enrichMarkets(topCids, seedTitles);
+    // Pull a wide net so the category filter has enough to cut from
+    const fetchPool = qualified.sort((a,b) => b[1].whales.size - a[1].whales.size)
+      .slice(0, TOP_MARKETS * 5).map(([cid]) => cid);
+    const { titles, blobs, polyProbs, outcomes } = await enrichMarkets(fetchPool, seedTitles);
+
+    // Apply category filter (uses Gamma blob + title for keyword match)
+    const topCids = fetchPool.filter(cid => {
+      if (!category) return true;
+      const blob = (blobs[cid] || '') + ' ' + (titles[cid] || '').toLowerCase();
+      return matchesCategory(blob, category, subcategory);
+    });
 
     // Fetch Vegas odds
     let vegasGames = [];
@@ -974,16 +1122,20 @@ async function runAnalysis() {
       </div>`).join('');
 
     const hasEdge = ranked.some(r => r.edge != null);
+    const catNote = filterLabel ? ` · filter: <strong>${escHtml(filterLabel)}</strong>` : '';
     document.getElementById('scan-meta').innerHTML =
-      `Top <strong>${wallets.length}</strong> profit wallets · ${WINDOW_LABEL[timePeriod]} · ` +
+      `Top <strong>${wallets.length}</strong> profit wallets · ${WINDOW_LABEL[timePeriod]}${catNote} · ` +
       (vegasGames.length ? `<strong>${vegasGames.length}</strong> Vegas games matched` : 'No Vegas data (add API key above)');
 
     document.getElementById('section-label').textContent =
       sortMode === 'edge' ? 'Sorted by Biggest Poly vs Vegas Edge' : 'Sorted by Most Whales';
 
     if (ranked.length === 0) {
+      const reason = filterLabel
+        ? `No <strong>${escHtml(filterLabel)}</strong> markets with ${minWhales}+ whales. Try All markets or lower the Min Whales filter.`
+        : `No markets found with ${minWhales}+ whales. Try lowering the Min Whales filter.`;
       document.getElementById('cards').innerHTML =
-        `<div class="card" style="text-align:center;color:var(--sub);padding:24px 16px;">No markets found with ${minWhales}+ whales. Try lowering the Min Whales filter.</div>`;
+        `<div class="card" style="text-align:center;color:var(--sub);padding:24px 16px;">${reason}</div>`;
       document.getElementById('results').style.display = 'block';
       return;
     }
