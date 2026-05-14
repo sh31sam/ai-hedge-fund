@@ -1,0 +1,824 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Politician Trades · Insider Tracker</title>
+<style>
+  :root {
+    --bg: #0d0d0d;
+    --card: #161616;
+    --card2: #1c1c1c;
+    --border: #2a2a2a;
+    --accent: #00e5a0;
+    --red: #ff4d6d;
+    --amber: #e5c300;
+    --blue: #4d9fff;
+    --purple: #b56fff;
+    --dem: #4d9fff;
+    --rep: #ff4d6d;
+    --ind: #b56fff;
+    --muted: #555;
+    --text: #e8e8e8;
+    --sub: #888;
+    font-size: 15px;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", sans-serif;
+    padding: env(safe-area-inset-top, 16px) env(safe-area-inset-right, 16px)
+             env(safe-area-inset-bottom, 24px) env(safe-area-inset-left, 16px);
+    padding-top: max(env(safe-area-inset-top), 20px);
+    min-height: 100dvh;
+  }
+
+  header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 12px 0 18px;
+    border-bottom: 1px solid var(--border);
+    margin-bottom: 18px;
+  }
+  header h1 { font-size: 1.1rem; font-weight: 700; letter-spacing: -0.3px; }
+  header span { font-size: 0.78rem; color: var(--sub); }
+
+  .controls {
+    display: grid;
+    gap: 8px;
+    margin-bottom: 14px;
+  }
+  .ctrl {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 8px 10px;
+  }
+  .ctrl-label {
+    display: block;
+    font-size: 0.62rem;
+    font-weight: 700;
+    color: var(--sub);
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    margin-bottom: 4px;
+  }
+  .ctrl select, .ctrl input {
+    width: 100%;
+    border: none;
+    background: transparent;
+    color: var(--text);
+    font-size: 0.92rem;
+    font-weight: 600;
+    appearance: none;
+    -webkit-appearance: none;
+  }
+  .ctrl select {
+    padding-right: 16px;
+    background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'><path fill='%23888' d='M5 6L0 0h10z'/></svg>");
+    background-repeat: no-repeat;
+    background-position: right 0 center;
+  }
+  .ctrl input::placeholder { color: var(--muted); font-weight: 400; }
+  .ctrl input:focus, .ctrl select:focus { outline: none; }
+
+  .view-toggle {
+    display: flex;
+    gap: 0;
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 4px;
+    margin-bottom: 14px;
+  }
+  .view-btn {
+    flex: 1;
+    padding: 8px;
+    background: transparent;
+    border: none;
+    color: var(--sub);
+    font-size: 0.82rem;
+    font-weight: 700;
+    cursor: pointer;
+    border-radius: 8px;
+    -webkit-tap-highlight-color: transparent;
+  }
+  .view-btn.active { background: #1f3a30; color: var(--accent); }
+
+  #run-btn {
+    display: block;
+    width: 100%;
+    padding: 14px;
+    border: none;
+    border-radius: 12px;
+    background: var(--accent);
+    color: #000;
+    font-size: 1rem;
+    font-weight: 700;
+    cursor: pointer;
+    transition: opacity 0.15s;
+    margin-bottom: 16px;
+    -webkit-tap-highlight-color: transparent;
+  }
+  #run-btn:disabled { opacity: 0.45; cursor: default; }
+  #run-btn:active:not(:disabled) { opacity: 0.75; }
+
+  #status {
+    font-size: 0.82rem;
+    color: var(--sub);
+    min-height: 1.4em;
+    margin-bottom: 8px;
+    text-align: center;
+  }
+  .progress-wrap {
+    background: var(--border);
+    border-radius: 4px;
+    height: 4px;
+    margin-bottom: 16px;
+    overflow: hidden;
+    display: none;
+  }
+  .progress-bar {
+    height: 100%;
+    background: var(--accent);
+    width: 0%;
+    transition: width 0.2s;
+  }
+  .error-msg {
+    background: #2a0a0a;
+    border: 1px solid var(--red);
+    border-radius: 10px;
+    padding: 12px 14px;
+    font-size: 0.82rem;
+    color: #ffaaaa;
+    margin-bottom: 14px;
+    display: none;
+  }
+
+  #results { display: none; }
+
+  .summary-row {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 12px;
+    flex-wrap: wrap;
+  }
+  .summary-chip {
+    flex: 1;
+    min-width: 80px;
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 10px 12px;
+    text-align: center;
+  }
+  .summary-chip .val { font-size: 1.15rem; font-weight: 700; color: var(--accent); }
+  .summary-chip .lbl { font-size: 0.65rem; color: var(--sub); text-transform: uppercase; letter-spacing: 0.06em; margin-top: 2px; }
+
+  .scan-meta {
+    font-size: 0.78rem;
+    color: var(--sub);
+    margin-bottom: 14px;
+    line-height: 1.5;
+  }
+  .scan-meta strong { color: var(--text); }
+
+  .section-label {
+    font-size: 0.7rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    color: var(--sub);
+    margin-bottom: 10px;
+  }
+
+  /* ── Trade card ── */
+  .trade {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    margin-bottom: 10px;
+    text-decoration: none;
+    color: inherit;
+    display: block;
+    overflow: hidden;
+    -webkit-tap-highlight-color: rgba(0,229,160,0.08);
+  }
+  .trade:active { background: var(--card2); }
+
+  .trade-top {
+    display: flex;
+    align-items: center;
+    padding: 12px 14px 8px;
+    gap: 8px;
+  }
+  .ticker {
+    font-family: ui-monospace, "SF Mono", Menlo, monospace;
+    font-size: 1.05rem;
+    font-weight: 800;
+    color: var(--text);
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .action-badge {
+    font-size: 0.65rem;
+    font-weight: 800;
+    padding: 3px 8px;
+    border-radius: 5px;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    flex-shrink: 0;
+  }
+  .action-buy  { background: #0a2a1a; color: var(--accent); }
+  .action-sell { background: #2a0a14; color: var(--red); }
+  .action-other{ background: var(--card2); color: var(--sub); }
+
+  .trade-pol {
+    padding: 0 14px 6px;
+    font-size: 0.85rem;
+    color: var(--text);
+    font-weight: 600;
+  }
+  .party-tag {
+    display: inline-block;
+    font-size: 0.62rem;
+    font-weight: 800;
+    padding: 1px 5px;
+    border-radius: 3px;
+    margin-left: 6px;
+    vertical-align: middle;
+  }
+  .party-D { background: #0a1a2a; color: var(--dem); }
+  .party-R { background: #2a0a0f; color: var(--rep); }
+  .party-I { background: #1a0a2a; color: var(--ind); }
+  .chamber-tag {
+    display: inline-block;
+    font-size: 0.6rem;
+    font-weight: 700;
+    padding: 1px 5px;
+    border-radius: 3px;
+    background: var(--card2);
+    color: var(--sub);
+    margin-left: 6px;
+    vertical-align: middle;
+    text-transform: uppercase;
+  }
+  .trade-meta {
+    padding: 0 14px 12px;
+    font-size: 0.78rem;
+    color: var(--sub);
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+  }
+  .trade-meta .amount {
+    color: var(--accent);
+    font-weight: 700;
+  }
+  .trade-meta .delay {
+    color: var(--amber);
+    font-weight: 600;
+  }
+  .trade-arrow {
+    color: var(--accent);
+    font-weight: 700;
+    margin-left: auto;
+  }
+
+  /* Convergence card */
+  .conv {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    margin-bottom: 12px;
+    overflow: hidden;
+  }
+  .conv-top {
+    padding: 14px;
+    border-bottom: 1px solid var(--border);
+  }
+  .conv-ticker {
+    font-family: ui-monospace, "SF Mono", Menlo, monospace;
+    font-size: 1.4rem;
+    font-weight: 800;
+    color: var(--text);
+    margin-bottom: 4px;
+  }
+  .conv-stats {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px;
+    font-size: 0.85rem;
+    color: var(--sub);
+  }
+  .conv-stats .net.positive { color: var(--accent); }
+  .conv-stats .net.negative { color: var(--red); }
+  .conv-toggle {
+    width: 100%;
+    background: none;
+    border: none;
+    border-top: 1px solid var(--border);
+    color: var(--accent);
+    font-size: 0.78rem;
+    font-weight: 600;
+    padding: 10px 14px;
+    text-align: left;
+    cursor: pointer;
+    -webkit-tap-highlight-color: transparent;
+  }
+  .conv-detail { display: none; }
+  .conv.expanded .conv-detail { display: block; }
+  .conv-row {
+    padding: 8px 14px;
+    border-top: 1px solid var(--border);
+    font-size: 0.82rem;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .conv-row .pol-name { flex: 1; }
+  .conv-row .pol-amt { color: var(--sub); font-size: 0.78rem; }
+
+  footer {
+    text-align: center;
+    padding: 20px 0 8px;
+    font-size: 0.68rem;
+    color: var(--muted);
+  }
+  footer a { color: var(--muted); }
+</style>
+</head>
+<body>
+
+<header>
+  <div>
+    <h1>🏛️📈 Politician Trades</h1>
+  </div>
+  <span id="header-sub">Insider tracker</span>
+</header>
+
+<div class="view-toggle">
+  <button class="view-btn active" data-view="recent" onclick="setView('recent')">📋 Recent Trades</button>
+  <button class="view-btn" data-view="conv" onclick="setView('conv')">🎯 Convergence</button>
+</div>
+
+<!-- Filters row 1 -->
+<div class="controls" style="grid-template-columns:1fr 1fr;">
+  <label class="ctrl">
+    <span class="ctrl-label">Time Window</span>
+    <select id="ctrl-days">
+      <option value="7">Last 7 days</option>
+      <option value="30" selected>Last 30 days</option>
+      <option value="60">Last 60 days</option>
+      <option value="90">Last 90 days</option>
+      <option value="365">Last year</option>
+      <option value="0">All available</option>
+    </select>
+  </label>
+  <label class="ctrl">
+    <span class="ctrl-label">Chamber</span>
+    <select id="ctrl-chamber">
+      <option value="all" selected>All</option>
+      <option value="house">🏛 House</option>
+      <option value="senate">🏛 Senate</option>
+    </select>
+  </label>
+</div>
+
+<!-- Filters row 2 -->
+<div class="controls" style="grid-template-columns:1fr 1fr;">
+  <label class="ctrl">
+    <span class="ctrl-label">Party</span>
+    <select id="ctrl-party">
+      <option value="all" selected>All</option>
+      <option value="D">🟦 Democrat</option>
+      <option value="R">🟥 Republican</option>
+      <option value="I">🟪 Independent</option>
+    </select>
+  </label>
+  <label class="ctrl">
+    <span class="ctrl-label">Action</span>
+    <select id="ctrl-action">
+      <option value="all" selected>All</option>
+      <option value="buy">🟢 Buys only</option>
+      <option value="sell">🔴 Sells only</option>
+    </select>
+  </label>
+</div>
+
+<!-- Filters row 3: search + sort -->
+<div class="controls" style="grid-template-columns:1fr 1fr;">
+  <label class="ctrl">
+    <span class="ctrl-label">Search Ticker / Name</span>
+    <input type="text" id="ctrl-search" placeholder="e.g. NVDA, Pelosi" autocomplete="off" spellcheck="false">
+  </label>
+  <label class="ctrl">
+    <span class="ctrl-label">Sort by</span>
+    <select id="ctrl-sort">
+      <option value="recent" selected>Most Recent</option>
+      <option value="amount">Largest Trade</option>
+      <option value="delay">Slowest Disclosure</option>
+    </select>
+  </label>
+</div>
+
+<button id="run-btn" onclick="loadTrades()">Load Trades</button>
+
+<div class="progress-wrap" id="prog-wrap">
+  <div class="progress-bar" id="prog-bar"></div>
+</div>
+
+<div id="status"></div>
+<div class="error-msg" id="error-box"></div>
+
+<div id="results">
+  <div class="summary-row" id="summary-row"></div>
+  <div class="scan-meta" id="scan-meta"></div>
+  <div class="section-label" id="section-label">Recent Trades</div>
+  <div id="cards"></div>
+</div>
+
+<footer>
+  Source: <a href="https://housestockwatcher.com" target="_blank">House Stock Watcher</a> ·
+  <a href="https://senatestockwatcher.com" target="_blank">Senate Stock Watcher</a><br>
+  Aggregated PTR (Periodic Transaction Report) filings
+</footer>
+
+<script>
+// ─── Constants ──────────────────────────────────────────────────────────────
+const HOUSE_URL  = 'https://house-stock-watcher-data.s3-us-west-2.amazonaws.com/data/all_transactions.json';
+const SENATE_URL = 'https://senate-stock-watcher-data.s3-us-west-2.amazonaws.com/aggregate/all_transactions.json';
+const CORS_PROXY = 'https://corsproxy.io/?';
+const TOP_RESULTS = 100;
+
+let allTrades = [];   // cached after first load
+let currentView = 'recent';
+
+// ─── UI helpers ─────────────────────────────────────────────────────────────
+function setStatus(msg) { document.getElementById('status').textContent = msg; }
+function setProgress(d, t) { document.getElementById('prog-bar').style.width = (t ? d/t*100 : 0) + '%'; }
+function showError(msg) { const e = document.getElementById('error-box'); e.style.display = 'block'; e.innerHTML = `<strong>Error</strong><br>${msg}`; }
+function hideError() { document.getElementById('error-box').style.display = 'none'; }
+function escHtml(s) { return String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+function fmtUSD(n) {
+  if (n == null) return '—';
+  if (n >= 1e6) return `$${(n/1e6).toFixed(1)}M`;
+  if (n >= 1e3) return `$${(n/1e3).toFixed(0)}k`;
+  return `$${Math.round(n)}`;
+}
+
+function setView(v) {
+  currentView = v;
+  for (const btn of document.querySelectorAll('.view-btn')) {
+    btn.classList.toggle('active', btn.dataset.view === v);
+  }
+  if (allTrades.length) render();
+}
+
+// ─── Fetch with CORS proxy fallback ─────────────────────────────────────────
+async function fetchJSON(url) {
+  try {
+    const res = await fetch(url, { headers: { 'Accept': 'application/json' } });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    return res.json();
+  } catch (err) {
+    // Fallback to CORS proxy
+    const res = await fetch(CORS_PROXY + encodeURIComponent(url), {
+      headers: { 'Accept': 'application/json' }
+    });
+    if (!res.ok) throw new Error(`HTTP ${res.status} via proxy`);
+    return res.json();
+  }
+}
+
+// ─── Amount range parsing ───────────────────────────────────────────────────
+// "$1,001 - $15,000" → midpoint ~$8,000
+function parseAmount(amountStr) {
+  if (!amountStr || typeof amountStr !== 'string') return null;
+  const nums = amountStr.replace(/[$,]/g, '').match(/\d+/g);
+  if (!nums || !nums.length) return null;
+  const vals = nums.map(Number);
+  if (vals.length === 1) return vals[0]; // single-value or "$50,000,001 +"
+  return (vals[0] + vals[1]) / 2;
+}
+
+// ─── Action normalization ───────────────────────────────────────────────────
+function classifyAction(t) {
+  const s = (t || '').toLowerCase();
+  if (s.includes('purchase') || s.includes('buy')) return 'buy';
+  if (s.includes('sale') || s.includes('sell'))   return 'sell';
+  return 'other';
+}
+
+// Some senator names include a comma+suffix; trim it
+function cleanName(n) {
+  if (!n) return '';
+  return n.replace(/^(Mr\.|Mrs\.|Ms\.|Dr\.|Hon\.|Honorable)\s+/i, '').trim();
+}
+
+// Date parser that handles both ISO and "MM/DD/YYYY"
+function parseDate(s) {
+  if (!s) return null;
+  if (/^\d{4}-\d{2}-\d{2}/.test(s)) return new Date(s);
+  if (/^\d{2}\/\d{2}\/\d{4}$/.test(s)) {
+    const [m, d, y] = s.split('/').map(Number);
+    return new Date(y, m-1, d);
+  }
+  const d = new Date(s);
+  return isNaN(d.getTime()) ? null : d;
+}
+
+function daysBetween(a, b) {
+  if (!a || !b) return null;
+  return Math.floor((b - a) / 86400000);
+}
+
+// ─── Normalize raw trade objects into a uniform shape ───────────────────────
+function normalizeHouseTrade(t) {
+  const ticker = (t.ticker || '').toUpperCase().trim();
+  const txDate = parseDate(t.transaction_date);
+  const dsDate = parseDate(t.disclosure_date);
+  return {
+    chamber: 'House',
+    name: cleanName(t.representative || t.name || ''),
+    party: (t.party || '').toUpperCase().charAt(0) || '',
+    state: t.state || '',
+    district: t.district || '',
+    ticker,
+    asset: t.asset_description || '',
+    type: t.type || '',
+    action: classifyAction(t.type),
+    amountStr: t.amount || '',
+    amount: parseAmount(t.amount),
+    transaction_date: txDate,
+    disclosure_date: dsDate,
+    delay_days: daysBetween(txDate, dsDate),
+    ptr_link: t.ptr_link || '',
+  };
+}
+
+function normalizeSenateTrade(t) {
+  const ticker = (t.ticker || '').toUpperCase().trim();
+  const txDate = parseDate(t.transaction_date);
+  const dsDate = parseDate(t.disclosure_date);
+  return {
+    chamber: 'Senate',
+    name: cleanName(t.senator || t.name || ''),
+    party: (t.party || '').toUpperCase().charAt(0) || '',
+    state: t.state || '',
+    district: '',
+    ticker,
+    asset: t.asset_description || '',
+    type: t.type || '',
+    action: classifyAction(t.type),
+    amountStr: t.amount || '',
+    amount: parseAmount(t.amount),
+    transaction_date: txDate,
+    disclosure_date: dsDate,
+    delay_days: daysBetween(txDate, dsDate),
+    ptr_link: t.ptr_link || '',
+  };
+}
+
+// ─── Main loader ────────────────────────────────────────────────────────────
+async function loadTrades() {
+  const btn = document.getElementById('run-btn');
+  btn.disabled = true;
+  hideError();
+  document.getElementById('results').style.display = 'none';
+  document.getElementById('prog-wrap').style.display = 'block';
+  setProgress(0, 1);
+
+  try {
+    setStatus('Fetching House transactions…');
+    setProgress(0, 2);
+    let house = [], senate = [];
+    try {
+      house = await fetchJSON(HOUSE_URL);
+    } catch (e) { console.warn('House fetch failed:', e); }
+    setProgress(1, 2);
+
+    setStatus('Fetching Senate transactions…');
+    try {
+      senate = await fetchJSON(SENATE_URL);
+    } catch (e) { console.warn('Senate fetch failed:', e); }
+    setProgress(2, 2);
+
+    if (!Array.isArray(house) && !Array.isArray(senate)) {
+      throw new Error('Could not fetch either House or Senate data. CORS may be blocking.');
+    }
+
+    setStatus('Normalizing data…');
+    const houseTrades = (Array.isArray(house) ? house : []).map(normalizeHouseTrade);
+    const senateTrades = (Array.isArray(senate) ? senate : []).map(normalizeSenateTrade);
+    allTrades = [...houseTrades, ...senateTrades]
+      .filter(t => t.ticker && t.transaction_date);
+
+    setStatus('');
+    document.getElementById('prog-wrap').style.display = 'none';
+    render();
+  } catch (err) {
+    setStatus('');
+    document.getElementById('prog-wrap').style.display = 'none';
+    showError(escHtml(err.message));
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+// ─── Render ─────────────────────────────────────────────────────────────────
+function applyFilters() {
+  const days     = parseInt(document.getElementById('ctrl-days').value, 10);
+  const chamber  = document.getElementById('ctrl-chamber').value;
+  const party    = document.getElementById('ctrl-party').value;
+  const action   = document.getElementById('ctrl-action').value;
+  const search   = document.getElementById('ctrl-search').value.trim().toLowerCase();
+
+  const cutoff = days > 0 ? new Date(Date.now() - days * 86400000) : null;
+
+  return allTrades.filter(t => {
+    if (cutoff && t.transaction_date < cutoff) return false;
+    if (chamber !== 'all' && t.chamber.toLowerCase() !== chamber) return false;
+    if (party !== 'all' && t.party !== party) return false;
+    if (action !== 'all' && t.action !== action) return false;
+    if (search) {
+      const hay = `${t.ticker} ${t.name} ${t.asset}`.toLowerCase();
+      if (!hay.includes(search)) return false;
+    }
+    return true;
+  });
+}
+
+function render() {
+  const filtered = applyFilters();
+  const sortMode = document.getElementById('ctrl-sort').value;
+  const days     = parseInt(document.getElementById('ctrl-days').value, 10);
+
+  // Summary chips
+  const buyCount  = filtered.filter(t => t.action === 'buy').length;
+  const sellCount = filtered.filter(t => t.action === 'sell').length;
+  const uniquePol = new Set(filtered.map(t => t.name)).size;
+  document.getElementById('summary-row').innerHTML = [
+    { val: filtered.length, lbl: 'Trades' },
+    { val: uniquePol,       lbl: 'Politicians' },
+    { val: `${buyCount}/${sellCount}`, lbl: 'Buy / Sell' },
+  ].map(c => `
+    <div class="summary-chip">
+      <div class="val">${typeof c.val === 'number' ? c.val.toLocaleString() : c.val}</div>
+      <div class="lbl">${c.lbl}</div>
+    </div>`).join('');
+
+  const windowLabel = days === 0 ? 'all available data' : `last ${days} days`;
+  document.getElementById('scan-meta').innerHTML =
+    `Showing trades from <strong>${escHtml(windowLabel)}</strong>. Disclosed via the STOCK Act PTR filings.`;
+
+  document.getElementById('results').style.display = 'block';
+
+  if (currentView === 'recent') {
+    document.getElementById('section-label').textContent = 'Recent Trades';
+    renderRecent(filtered, sortMode);
+  } else {
+    document.getElementById('section-label').textContent = 'Tickers Bought/Sold by Multiple Politicians';
+    renderConvergence(filtered);
+  }
+}
+
+function renderRecent(trades, sortMode) {
+  const sorted = [...trades];
+  if (sortMode === 'recent') {
+    sorted.sort((a, b) => (b.disclosure_date || b.transaction_date) - (a.disclosure_date || a.transaction_date));
+  } else if (sortMode === 'amount') {
+    sorted.sort((a, b) => (b.amount || 0) - (a.amount || 0));
+  } else if (sortMode === 'delay') {
+    sorted.sort((a, b) => (b.delay_days || 0) - (a.delay_days || 0));
+  }
+
+  const top = sorted.slice(0, TOP_RESULTS);
+  if (!top.length) {
+    document.getElementById('cards').innerHTML =
+      `<div class="trade" style="text-align:center;color:var(--sub);padding:24px 16px;">No trades match the current filters. Try widening the time window or clearing the search.</div>`;
+    return;
+  }
+
+  document.getElementById('cards').innerHTML = top.map(t => {
+    const actionCls = t.action === 'buy' ? 'action-buy' : t.action === 'sell' ? 'action-sell' : 'action-other';
+    const actionLbl = (t.type || t.action || '').toUpperCase();
+    const partyTag  = t.party ? `<span class="party-tag party-${t.party}">${t.party}</span>` : '';
+    const stateLoc  = [t.state, t.district].filter(Boolean).join('-');
+    const txStr     = t.transaction_date ? t.transaction_date.toISOString().slice(0,10) : '?';
+    const dsStr     = t.disclosure_date ? t.disclosure_date.toISOString().slice(0,10) : '?';
+    const delayStr  = t.delay_days != null ? `Disclosed ${t.delay_days}d later` : '';
+    const ytickerUrl = `https://finance.yahoo.com/quote/${encodeURIComponent(t.ticker)}`;
+    const href = t.ptr_link || ytickerUrl;
+    return `
+      <a class="trade" href="${escHtml(href)}" target="_blank" rel="noopener noreferrer">
+        <div class="trade-top">
+          <span class="ticker">${escHtml(t.ticker)}</span>
+          <span class="action-badge ${actionCls}">${escHtml(actionLbl)}</span>
+        </div>
+        <div class="trade-pol">
+          ${escHtml(t.name)}${partyTag}<span class="chamber-tag">${escHtml(t.chamber)}${stateLoc ? ' · '+escHtml(stateLoc) : ''}</span>
+        </div>
+        <div class="trade-meta">
+          <span class="amount">${escHtml(t.amountStr || fmtUSD(t.amount))}</span>
+          <span>Traded ${txStr}</span>
+          ${delayStr ? `<span class="delay">${delayStr}</span>` : ''}
+          <span class="trade-arrow">↗</span>
+        </div>
+      </a>`;
+  }).join('');
+}
+
+function renderConvergence(trades) {
+  // Group by ticker
+  const byTicker = {};
+  for (const t of trades) {
+    if (!byTicker[t.ticker]) byTicker[t.ticker] = { ticker: t.ticker, trades: [], politicians: new Set(), buys: 0, sells: 0, netAmount: 0 };
+    const g = byTicker[t.ticker];
+    g.trades.push(t);
+    g.politicians.add(t.name);
+    if (t.action === 'buy')  { g.buys++;  g.netAmount += (t.amount || 0); }
+    if (t.action === 'sell') { g.sells++; g.netAmount -= (t.amount || 0); }
+  }
+
+  // Filter to convergence (2+ politicians)
+  const groups = Object.values(byTicker)
+    .filter(g => g.politicians.size >= 2)
+    .sort((a, b) => b.politicians.size - a.politicians.size)
+    .slice(0, TOP_RESULTS);
+
+  if (!groups.length) {
+    document.getElementById('cards').innerHTML =
+      `<div class="trade" style="text-align:center;color:var(--sub);padding:24px 16px;">No tickers traded by 2+ politicians in this window. Try widening the time window.</div>`;
+    return;
+  }
+
+  document.getElementById('cards').innerHTML = groups.map((g, i) => {
+    const netCls = g.netAmount > 0 ? 'positive' : g.netAmount < 0 ? 'negative' : '';
+    const netStr = g.netAmount === 0 ? '$0' : (g.netAmount > 0 ? '+' : '−') + fmtUSD(Math.abs(g.netAmount));
+    const ytickerUrl = `https://finance.yahoo.com/quote/${encodeURIComponent(g.ticker)}`;
+
+    // Per-politician summary
+    const polSummary = {};
+    for (const t of g.trades) {
+      const k = t.name;
+      if (!polSummary[k]) polSummary[k] = { name: t.name, party: t.party, chamber: t.chamber, total: 0, count: 0, lastDate: null };
+      polSummary[k].count++;
+      const sign = t.action === 'buy' ? 1 : t.action === 'sell' ? -1 : 0;
+      polSummary[k].total += sign * (t.amount || 0);
+      if (!polSummary[k].lastDate || t.transaction_date > polSummary[k].lastDate) polSummary[k].lastDate = t.transaction_date;
+    }
+    const polRows = Object.values(polSummary).sort((a, b) => Math.abs(b.total) - Math.abs(a.total));
+
+    const detailHtml = polRows.map(p => {
+      const partyTag = p.party ? `<span class="party-tag party-${p.party}">${p.party}</span>` : '';
+      const sign = p.total > 0 ? '+' : p.total < 0 ? '−' : '';
+      return `
+        <div class="conv-row">
+          <span class="pol-name">${escHtml(p.name)}${partyTag}</span>
+          <span class="pol-amt">${sign}${fmtUSD(Math.abs(p.total))} · ${p.count}× · ${p.lastDate ? p.lastDate.toISOString().slice(0,10) : '?'}</span>
+        </div>`;
+    }).join('');
+
+    return `
+      <div class="conv" id="conv-${i}">
+        <div class="conv-top">
+          <div class="conv-ticker"><a href="${escHtml(ytickerUrl)}" target="_blank" rel="noopener" style="color:inherit;text-decoration:none;">${escHtml(g.ticker)} ↗</a></div>
+          <div class="conv-stats">
+            <span><strong style="color:var(--text)">${g.politicians.size}</strong> politicians</span>
+            <span><span style="color:var(--accent)">${g.buys}</span> buys · <span style="color:var(--red)">${g.sells}</span> sells</span>
+            <span class="net ${netCls}">Net: ${netStr}</span>
+          </div>
+        </div>
+        <button class="conv-toggle" onclick="toggleConv(${i})">
+          <span class="toggle-label">Show ${g.politicians.size} politicians</span>
+        </button>
+        <div class="conv-detail">${detailHtml}</div>
+      </div>`;
+  }).join('');
+}
+
+function toggleConv(i) {
+  const c = document.getElementById(`conv-${i}`);
+  if (!c) return;
+  const open = c.classList.toggle('expanded');
+  const label = c.querySelector('.toggle-label');
+  if (label) {
+    const n = c.querySelectorAll('.conv-row').length;
+    label.textContent = open ? `Hide ${n} politicians` : `Show ${n} politicians`;
+  }
+}
+
+// Re-render when filters change (after first load)
+for (const id of ['ctrl-days', 'ctrl-chamber', 'ctrl-party', 'ctrl-action', 'ctrl-sort']) {
+  document.getElementById(id).addEventListener('change', () => { if (allTrades.length) render(); });
+}
+document.getElementById('ctrl-search').addEventListener('input', () => { if (allTrades.length) render(); });
+</script>
+</body>
+</html>
