@@ -1,0 +1,974 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Whale Tracker · Polymarket</title>
+<style>
+  :root {
+    --bg: #0d0d0d;
+    --card: #161616;
+    --border: #2a2a2a;
+    --accent: #00e5a0;
+    --red: #ff4d6d;
+    --amber: #e5c300;
+    --muted: #555;
+    --text: #e8e8e8;
+    --sub: #888;
+    font-size: 15px;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", sans-serif;
+    padding: env(safe-area-inset-top, 16px) env(safe-area-inset-right, 16px)
+             env(safe-area-inset-bottom, 24px) env(safe-area-inset-left, 16px);
+    padding-top: max(env(safe-area-inset-top), 20px);
+    min-height: 100dvh;
+  }
+
+  header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 12px 0 18px;
+    border-bottom: 1px solid var(--border);
+    margin-bottom: 18px;
+  }
+  header h1 { font-size: 1.1rem; font-weight: 700; letter-spacing: -0.3px; }
+  header span { font-size: 0.78rem; color: var(--sub); }
+
+  /* ── Controls ─────────────────────────────────────────────────────────── */
+  .controls {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    gap: 8px;
+    margin-bottom: 14px;
+  }
+  .ctrl {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 8px 10px;
+  }
+  .ctrl-label {
+    display: block;
+    font-size: 0.62rem;
+    font-weight: 700;
+    color: var(--sub);
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    margin-bottom: 4px;
+  }
+  .ctrl select {
+    width: 100%;
+    border: none;
+    background: transparent;
+    color: var(--text);
+    font-size: 0.92rem;
+    font-weight: 600;
+    appearance: none;
+    -webkit-appearance: none;
+    padding-right: 16px;
+    background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'><path fill='%23888' d='M5 6L0 0h10z'/></svg>");
+    background-repeat: no-repeat;
+    background-position: right 0 center;
+  }
+  .ctrl select:focus { outline: none; }
+
+  #run-btn {
+    display: block;
+    width: 100%;
+    padding: 14px;
+    border: none;
+    border-radius: 12px;
+    background: var(--accent);
+    color: #000;
+    font-size: 1rem;
+    font-weight: 700;
+    cursor: pointer;
+    transition: opacity 0.15s;
+    margin-bottom: 16px;
+    -webkit-tap-highlight-color: transparent;
+  }
+  #run-btn:disabled { opacity: 0.45; cursor: default; }
+  #run-btn:active:not(:disabled) { opacity: 0.75; }
+
+  #status {
+    font-size: 0.82rem;
+    color: var(--sub);
+    margin-bottom: 12px;
+    min-height: 1.2em;
+    text-align: center;
+  }
+
+  .progress-wrap {
+    height: 3px;
+    background: var(--border);
+    border-radius: 2px;
+    margin-bottom: 18px;
+    overflow: hidden;
+    display: none;
+  }
+  .progress-bar {
+    height: 100%;
+    background: var(--accent);
+    border-radius: 2px;
+    transition: width 0.2s ease;
+    width: 0%;
+  }
+
+  .section-label {
+    font-size: 0.7rem;
+    font-weight: 600;
+    color: var(--sub);
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    margin-bottom: 10px;
+  }
+
+  /* ── Summary chips ────────────────────────────────────────────────────── */
+  .summary-row {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 18px;
+  }
+  .summary-chip {
+    flex: 1;
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 10px 8px;
+    text-align: center;
+  }
+  .summary-chip .val { font-size: 1.15rem; font-weight: 800; color: var(--accent); }
+  .summary-chip .lbl { font-size: 0.66rem; color: var(--sub); margin-top: 2px; }
+
+  .scan-meta {
+    font-size: 0.72rem;
+    color: var(--sub);
+    text-align: center;
+    margin-bottom: 14px;
+    line-height: 1.4;
+  }
+  .scan-meta strong { color: var(--text); }
+
+  /* ── Cards ────────────────────────────────────────────────────────────── */
+  .card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 14px 16px;
+    margin-bottom: 10px;
+  }
+
+  .card-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 8px;
+    margin-bottom: 10px;
+  }
+  .rank {
+    font-size: 0.72rem;
+    font-weight: 700;
+    color: var(--sub);
+    min-width: 22px;
+    padding-top: 2px;
+  }
+  .question {
+    flex: 1;
+    font-size: 0.9rem;
+    font-weight: 600;
+    line-height: 1.35;
+    color: var(--text);
+  }
+  .whale-count {
+    font-size: 1rem;
+    font-weight: 800;
+    color: var(--accent);
+    min-width: 28px;
+    text-align: right;
+  }
+
+  .convergence-line {
+    font-size: 0.76rem;
+    color: var(--sub);
+    margin-bottom: 10px;
+    line-height: 1.4;
+  }
+  .convergence-line .num { color: var(--text); font-weight: 700; }
+  .pct-badge {
+    display: inline-block;
+    font-size: 0.7rem;
+    background: #1a2e24;
+    color: var(--accent);
+    padding: 1px 8px;
+    border-radius: 99px;
+    font-weight: 700;
+    margin-right: 4px;
+  }
+
+  .bet-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+  .bet-badge {
+    font-size: 0.76rem;
+    font-weight: 800;
+    padding: 4px 9px;
+    border-radius: 8px;
+    min-width: 64px;
+    text-align: center;
+    white-space: nowrap;
+  }
+  .bet-yes     { background: #0d2e1e; color: var(--accent); }
+  .bet-no      { background: #2e0d15; color: var(--red); }
+  .bet-split   { background: #2a2510; color: var(--amber); }
+  .bet-unknown { background: #1e1e1e; color: var(--sub); }
+
+  .bar-wrap {
+    flex: 1;
+    height: 6px;
+    background: var(--border);
+    border-radius: 3px;
+    overflow: hidden;
+    display: flex;
+  }
+  .bar-yes { background: var(--accent); height: 100%; transition: width 0.4s ease; }
+  .bar-no  { background: var(--red);    height: 100%; transition: width 0.4s ease; }
+
+  .split-label { font-size: 0.72rem; color: var(--sub); white-space: nowrap; }
+
+  /* ── Expand/collapse wallet detail ─────────────────────────────────────── */
+  .toggle-row {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    margin-top: 12px;
+    padding: 8px;
+    background: #1c1c1c;
+    border-radius: 8px;
+    font-size: 0.74rem;
+    font-weight: 600;
+    color: var(--sub);
+    cursor: pointer;
+    -webkit-tap-highlight-color: transparent;
+    user-select: none;
+    transition: background 0.15s;
+  }
+  .toggle-row:active { background: #232323; }
+  .toggle-row .chev {
+    display: inline-block;
+    transition: transform 0.2s ease;
+    color: var(--accent);
+    font-weight: 800;
+  }
+  .card.expanded .toggle-row .chev { transform: rotate(180deg); }
+
+  .wallet-list {
+    display: none;
+    margin-top: 10px;
+    border-top: 1px solid var(--border);
+    padding-top: 10px;
+  }
+  .card.expanded .wallet-list { display: block; }
+
+  .wallet-row {
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+    padding: 10px 4px;
+    border-radius: 6px;
+    text-decoration: none;
+    color: inherit;
+    -webkit-tap-highlight-color: rgba(0,229,160,0.08);
+  }
+  .wallet-row + .wallet-row { border-top: 1px solid #202020; }
+  .wallet-row:active { background: #1a1a1a; }
+  .wallet-arrow {
+    color: var(--accent);
+    font-size: 1rem;
+    font-weight: 700;
+    align-self: center;
+    flex-shrink: 0;
+    margin-left: 4px;
+  }
+
+  .wallet-info {
+    flex: 1;
+    min-width: 0;
+  }
+  .wallet-addr {
+    font-family: ui-monospace, "SF Mono", Menlo, monospace;
+    font-size: 0.78rem;
+    color: var(--text);
+    display: block;
+    margin-bottom: 5px;
+  }
+
+  /* Specific bet tags — one per position the whale holds in this market */
+  .bet-tags {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+  }
+  .bet-tag {
+    font-size: 0.68rem;
+    font-weight: 700;
+    padding: 3px 7px;
+    border-radius: 6px;
+    white-space: nowrap;
+    max-width: 180px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+  }
+  .bet-tag.yes    { background: #0d2e1e; color: var(--accent); }
+  .bet-tag.no     { background: #2e0d15; color: var(--red); }
+  .bet-tag.named  { background: #16243a; color: #7ab8f5; }
+  .bet-tag.hedge  { background: #2a2510; color: var(--amber); }
+  .bet-tag .bet-val {
+    font-weight: 400;
+    opacity: 0.75;
+    font-size: 0.64rem;
+  }
+
+  .wallet-total {
+    font-size: 0.76rem;
+    color: var(--sub);
+    min-width: 54px;
+    text-align: right;
+    font-variant-numeric: tabular-nums;
+    padding-top: 2px;
+    white-space: nowrap;
+  }
+
+  .wallet-hint {
+    font-size: 0.68rem;
+    color: var(--muted);
+    text-align: center;
+    margin-top: 8px;
+    padding: 4px 0;
+    font-style: italic;
+  }
+
+  .error-msg {
+    background: #2e0d15;
+    border: 1px solid var(--red);
+    border-radius: 12px;
+    padding: 14px 16px;
+    font-size: 0.85rem;
+    color: #ff8099;
+    line-height: 1.5;
+    display: none;
+    margin-bottom: 14px;
+  }
+
+  #results { display: none; }
+
+  footer {
+    text-align: center;
+    font-size: 0.7rem;
+    color: var(--muted);
+    margin-top: 24px;
+    padding-bottom: 8px;
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div>
+    <h1>🐳 Whale Tracker</h1>
+    <span id="header-sub">Polymarket convergence</span>
+  </div>
+</header>
+
+<!-- Controls row 1 -->
+<div class="controls" style="grid-template-columns:1fr 1fr;">
+  <label class="ctrl">
+    <span class="ctrl-label">Window</span>
+    <select id="ctrl-window">
+      <option value="DAY">Today</option>
+      <option value="WEEK" selected>This week</option>
+      <option value="MONTH">This month</option>
+      <option value="ALL">All-time</option>
+    </select>
+  </label>
+  <label class="ctrl">
+    <span class="ctrl-label"># Wallets</span>
+    <select id="ctrl-n">
+      <option value="50">50</option>
+      <option value="100" selected>100</option>
+      <option value="200">200</option>
+    </select>
+  </label>
+</div>
+<!-- Controls row 2: market category + subcategory -->
+<div class="controls" style="grid-template-columns:1fr 1fr; margin-bottom:14px;">
+  <label class="ctrl">
+    <span class="ctrl-label">Category</span>
+    <select id="ctrl-category" onchange="onCategoryChange()">
+      <option value="">All markets</option>
+      <option value="sports">🏆 Sports</option>
+      <option value="politics">🗳 Politics</option>
+      <option value="crypto">🪙 Crypto</option>
+      <option value="economics">📈 Economics</option>
+      <option value="tech">💻 Tech</option>
+      <option value="culture">🎭 Culture</option>
+      <option value="weather">🌦 Weather</option>
+    </select>
+  </label>
+  <label class="ctrl">
+    <span class="ctrl-label">Subcategory</span>
+    <select id="ctrl-subcategory" disabled>
+      <option value="">All</option>
+    </select>
+  </label>
+</div>
+
+<button id="run-btn" onclick="runAnalysis()">Find Whale Convergence</button>
+
+<div class="progress-wrap" id="prog-wrap">
+  <div class="progress-bar" id="prog-bar"></div>
+</div>
+
+<div id="status"></div>
+<div class="error-msg" id="error-box"></div>
+
+<div id="results">
+  <div class="summary-row" id="summary-row"></div>
+  <div class="scan-meta" id="scan-meta"></div>
+  <div class="section-label">Top 10 Markets by Whale Overlap</div>
+  <div id="cards"></div>
+</div>
+
+<footer>Data: data-api.polymarket.com · gamma-api.polymarket.com</footer>
+
+<script>
+// ─── Config ────────────────────────────────────────────────────────────────
+const LEADERBOARD_URL = 'https://data-api.polymarket.com/v1/leaderboard';
+const POSITIONS_URL   = 'https://data-api.polymarket.com/positions';
+const GAMMA_URL       = 'https://gamma-api.polymarket.com/markets';
+const TOP_MARKETS     = 10;
+const CONCURRENCY     = 8;
+
+const WINDOW_LABEL = { DAY: 'today', WEEK: 'this week', MONTH: 'this month', ALL: 'all-time' };
+
+// ─── UI helpers ────────────────────────────────────────────────────────────
+function setStatus(msg) { document.getElementById('status').textContent = msg; }
+function setProgress(done, total) {
+  const pct = total ? (done / total * 100) : 0;
+  document.getElementById('prog-bar').style.width = pct + '%';
+}
+function showError(msg) {
+  const el = document.getElementById('error-box');
+  el.style.display = 'block';
+  el.innerHTML = `<strong>Error</strong><br>${msg}`;
+}
+function hideError() { document.getElementById('error-box').style.display = 'none'; }
+
+function escHtml(s) {
+  return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}
+function fmtVal(v) {
+  if (!v || v < 1) return '';
+  return v >= 1000 ? `$${(v/1000).toFixed(1)}k` : `$${Math.round(v)}`;
+}
+
+function toggleCard(i) {
+  const card = document.getElementById(`card-${i}`);
+  if (!card) return;
+  const isOpen = card.classList.toggle('expanded');
+  const label = card.querySelector('.toggle-label');
+  if (label) {
+    const n = card.querySelectorAll('.wallet-row').length;
+    label.textContent = isOpen
+      ? `Hide ${n} wallet${n === 1 ? '' : 's'}`
+      : `Show ${n} wallet${n === 1 ? '' : 's'}`;
+  }
+}
+
+async function fetchJSON(url, params = {}) {
+  const qs = new URLSearchParams(params).toString();
+  const full = qs ? `${url}?${qs}` : url;
+  const res = await fetch(full, { headers: { 'Accept': 'application/json' } });
+  if (!res.ok) throw new Error(`HTTP ${res.status} — ${full}`);
+  return res.json();
+}
+
+async function pool(tasks, limit, onDone) {
+  const results = new Array(tasks.length);
+  let idx = 0;
+  async function worker() {
+    while (idx < tasks.length) {
+      const i = idx++;
+      results[i] = await tasks[i]();
+      onDone(i);
+    }
+  }
+  await Promise.all(Array.from({ length: Math.min(limit, tasks.length) }, worker));
+  return results;
+}
+
+// ─── Leaderboard (paginated, max 50/page) ──────────────────────────────────
+async function fetchLeaderboard(total, timePeriod, orderBy) {
+  const wallets = [];
+  let offset = 0;
+  while (wallets.length < total) {
+    const limit = Math.min(50, total - wallets.length);
+    const data = await fetchJSON(LEADERBOARD_URL, { timePeriod, orderBy, limit, offset });
+    const rows = Array.isArray(data) ? data : (data.data || []);
+    if (!rows.length) break;
+    for (const r of rows) {
+      const addr = r.proxyWallet || r.proxy_wallet || r.address || r.wallet;
+      if (addr) wallets.push(addr.toLowerCase());
+    }
+    offset += rows.length;
+    if (rows.length < limit) break;
+  }
+  return wallets.slice(0, total);
+}
+
+async function fetchPositions(address) {
+  try {
+    const data = await fetchJSON(POSITIONS_URL, {
+      user: address, sizeThreshold: '0.01',
+      sortBy: 'CASHPNL', sortDirection: 'DESC', limit: 500
+    });
+    const rows = Array.isArray(data) ? data : (data.data || data.positions || []);
+    return rows.filter(p => parseFloat(p.size || p.currentTokens || p.quantity || 0) > 0.01);
+  } catch { return []; }
+}
+
+async function enrichTitlesAndCategories(conditionIds, existingTitles) {
+  const titles     = { ...existingTitles };
+  // categories[cid] = lowercased string blob containing category + tags + slug
+  // so we can keyword-match against it later (handles "Sports" vs "MLB" vs "NBA")
+  const categories = {};
+
+  for (let i = 0; i < conditionIds.length; i += 20) {
+    const batch = conditionIds.slice(i, i + 20);
+    try {
+      const data = await fetchJSON(GAMMA_URL, { condition_ids: batch.join(',') });
+      const mkts = Array.isArray(data) ? data : (data.data || []);
+      for (const m of mkts) {
+        const cid = m.conditionId || m.condition_id;
+        if (!cid) continue;
+        titles[cid] = m.question || m.title || cid;
+
+        // Collect every possible category/tag signal into one searchable blob
+        const bits = [];
+        if (m.category) bits.push(m.category);
+        if (Array.isArray(m.categories)) bits.push(...m.categories);
+        if (Array.isArray(m.tags)) {
+          for (const t of m.tags) {
+            if (typeof t === 'string') bits.push(t);
+            else if (t && typeof t === 'object') bits.push(t.label || t.slug || '');
+          }
+        }
+        if (m.slug)      bits.push(m.slug);
+        if (m.eventSlug) bits.push(m.eventSlug);
+        categories[cid] = bits.filter(Boolean).join(' ').toLowerCase();
+      }
+    } catch { /* keep raw IDs, no category */ }
+  }
+  return { titles, categories };
+}
+
+// Keyword aliases so e.g. "sports" matches MLB/NBA/NFL/soccer markets
+const CATEGORY_ALIASES = {
+  sports:    ['sports', 'mlb', 'nba', 'nfl', 'nhl', 'soccer', 'tennis', 'ufc', 'mma', 'boxing', 'esports', 'f1', 'golf', 'cricket'],
+  politics:  ['politics', 'election', 'president', 'congress', 'senate', 'trump', 'biden', 'gop', 'democrat'],
+  crypto:    ['crypto', 'bitcoin', 'btc', 'eth', 'ethereum', 'solana', 'doge', 'memecoin'],
+  economics: ['economics', 'economy', 'fed', 'interest', 'recession', 'inflation', 'gdp', 'unemployment', 'jobs'],
+  tech:      ['tech', 'ai', 'openai', 'apple', 'google', 'tesla', 'nvidia', 'meta'],
+  culture:   ['culture', 'movies', 'music', 'celebrity', 'awards', 'oscars', 'grammys', 'tv'],
+  weather:   ['weather', 'hurricane', 'storm', 'climate', 'temperature'],
+};
+
+// Subcategory keyword sets — each value is an array of search terms
+const SUBCATEGORIES = {
+  sports: [
+    { value: 'mlb',    label: '⚾ MLB',    kws: ['mlb', 'baseball', 'yankees', 'dodgers', 'mets', 'red sox', 'astros', 'cubs', 'braves'] },
+    { value: 'nba',    label: '🏀 NBA',    kws: ['nba', 'basketball', 'lakers', 'celtics', 'warriors', 'knicks', 'heat', 'bulls'] },
+    { value: 'nfl',    label: '🏈 NFL',    kws: ['nfl', 'football', 'super bowl', 'cowboys', 'patriots', 'chiefs', 'eagles', '49ers'] },
+    { value: 'nhl',    label: '🏒 NHL',    kws: ['nhl', 'hockey', 'rangers', 'maple leafs', 'oilers'] },
+    { value: 'soccer', label: '⚽ Soccer', kws: ['soccer', 'football club', 'premier league', 'champions league', 'la liga', 'world cup', 'mls', 'epl'] },
+    { value: 'ufc',    label: '🥋 UFC/MMA',kws: ['ufc', 'mma', 'mixed martial', 'boxing'] },
+    { value: 'tennis', label: '🎾 Tennis', kws: ['tennis', 'wimbledon', 'us open', 'french open', 'atp', 'wta'] },
+    { value: 'f1',     label: '🏎 F1',     kws: ['f1', 'formula 1', 'grand prix', 'verstappen', 'hamilton'] },
+    { value: 'golf',   label: '⛳ Golf',   kws: ['golf', 'pga', 'masters', 'tiger', 'rory'] },
+  ],
+  politics: [
+    { value: 'us-election', label: '🇺🇸 US Elections', kws: ['president', 'election', 'gop', 'democrat', 'primary', 'caucus', 'electoral'] },
+    { value: 'trump',       label: '👤 Trump',         kws: ['trump'] },
+    { value: 'congress',    label: '🏛 Congress',      kws: ['congress', 'senate', 'house', 'speaker'] },
+    { value: 'world',       label: '🌍 World',         kws: ['ukraine', 'russia', 'china', 'taiwan', 'iran', 'israel', 'gaza', 'putin', 'xi'] },
+  ],
+  crypto: [
+    { value: 'bitcoin',  label: '₿ Bitcoin',  kws: ['bitcoin', 'btc'] },
+    { value: 'ethereum', label: 'Ξ Ethereum', kws: ['ethereum', 'eth', 'ether'] },
+    { value: 'solana',   label: '◎ Solana',   kws: ['solana', 'sol'] },
+    { value: 'memecoin', label: '🐶 Memecoins',kws: ['doge', 'shib', 'pepe', 'memecoin', 'meme coin', 'wif', 'bonk'] },
+  ],
+  economics: [
+    { value: 'fed',       label: '🏦 Fed Rates',  kws: ['fed', 'interest rate', 'rate cut', 'rate hike', 'fomc', 'powell'] },
+    { value: 'recession', label: '📉 Recession',  kws: ['recession', 'gdp', 'downturn'] },
+    { value: 'inflation', label: '💸 Inflation',  kws: ['inflation', 'cpi', 'ppi'] },
+    { value: 'jobs',      label: '💼 Jobs',       kws: ['unemployment', 'jobs report', 'payroll', 'labor'] },
+  ],
+  tech: [
+    { value: 'ai',     label: '🤖 AI',     kws: ['ai', 'artificial intelligence', 'agi', 'openai', 'anthropic', 'claude', 'gpt', 'gemini'] },
+    { value: 'apple',  label: '🍎 Apple',  kws: ['apple', 'iphone'] },
+    { value: 'tesla',  label: '🚗 Tesla',  kws: ['tesla', 'musk', 'cybertruck'] },
+    { value: 'nvidia', label: '💚 Nvidia', kws: ['nvidia', 'gpu'] },
+  ],
+  culture: [
+    { value: 'movies', label: '🎬 Movies', kws: ['movie', 'film', 'box office', 'oscar'] },
+    { value: 'music',  label: '🎵 Music',  kws: ['music', 'grammy', 'album', 'taylor swift', 'drake'] },
+    { value: 'awards', label: '🏆 Awards', kws: ['oscar', 'grammy', 'emmy', 'award'] },
+  ],
+  weather: [
+    { value: 'hurricane',   label: '🌀 Hurricane',   kws: ['hurricane', 'tropical storm', 'cyclone'] },
+    { value: 'temperature', label: '🌡 Temperature', kws: ['temperature', 'hottest', 'coldest', 'heatwave'] },
+  ],
+};
+
+function matchesCategory(blob, selectedCat, selectedSub) {
+  if (!selectedCat && !selectedSub) return true;
+  if (!blob) return false;
+  // If a subcategory is picked, match against ITS specific keywords (more precise)
+  if (selectedSub) {
+    const subList = SUBCATEGORIES[selectedCat] || [];
+    const sub = subList.find(s => s.value === selectedSub);
+    if (sub) return sub.kws.some(kw => blob.includes(kw));
+  }
+  // Otherwise fall back to the broad parent-category keyword set
+  const aliases = CATEGORY_ALIASES[selectedCat] || [selectedCat];
+  return aliases.some(a => blob.includes(a));
+}
+
+// Populate the subcategory dropdown when the parent category changes
+function onCategoryChange() {
+  const cat = document.getElementById('ctrl-category').value;
+  const sub = document.getElementById('ctrl-subcategory');
+  sub.innerHTML = '<option value="">All</option>';
+  const list = SUBCATEGORIES[cat] || [];
+  if (!cat || list.length === 0) {
+    sub.disabled = true;
+    return;
+  }
+  sub.disabled = false;
+  for (const item of list) {
+    const opt = document.createElement('option');
+    opt.value = item.value;
+    opt.textContent = item.label;
+    sub.appendChild(opt);
+  }
+}
+
+// ─── Main analysis ──────────────────────────────────────────────────────────
+async function runAnalysis() {
+  const btn = document.getElementById('run-btn');
+  btn.disabled = true;
+  hideError();
+  document.getElementById('results').style.display = 'none';
+  document.getElementById('prog-wrap').style.display = 'block';
+  setProgress(0, 1);
+
+  const timePeriod   = document.getElementById('ctrl-window').value;
+  const orderBy      = 'PNL';
+  const topN         = parseInt(document.getElementById('ctrl-n').value, 10);
+  const category     = document.getElementById('ctrl-category').value;       // '' = all
+  const subcategory  = document.getElementById('ctrl-subcategory').value;    // '' = all of category
+
+  // Build a human-readable filter label
+  let filterLabel = '';
+  if (subcategory) {
+    const subList = SUBCATEGORIES[category] || [];
+    const sub = subList.find(s => s.value === subcategory);
+    filterLabel = sub ? sub.label : subcategory;
+  } else if (category) {
+    filterLabel = category;
+  }
+
+  try {
+    const filterStatus = filterLabel ? ` · filter: ${filterLabel}` : '';
+    setStatus(`Fetching top ${topN} wallets by profit (${WINDOW_LABEL[timePeriod]})${filterStatus}…`);
+    const wallets = await fetchLeaderboard(topN, timePeriod, orderBy);
+    if (!wallets.length) throw new Error('No wallets returned from the leaderboard.');
+    setStatus(`Got ${wallets.length} whale wallets. Fetching positions…`);
+
+    // conditionId → { whales: Set<addr>, positions: [{addr, outcome, value, size, price}], title }
+    const markets = {};
+    let done = 0;
+
+    const tasks = wallets.map(addr => async () => {
+      const positions = await fetchPositions(addr);
+      for (const p of positions) {
+        const cid = p.conditionId || p.condition_id || p.market || p.marketId;
+        if (!cid) continue;
+        if (!markets[cid]) markets[cid] = { whales: new Set(), positions: [], title: '' };
+        markets[cid].whales.add(addr);
+
+        // Normalize outcome: case-insensitive, fall back to outcomeIndex (0=Yes, 1=No)
+        let outcome = (p.outcome || '').toString().trim();
+        if (!outcome && typeof p.outcomeIndex === 'number') {
+          outcome = p.outcomeIndex === 0 ? 'Yes' : 'No';
+        }
+        const lc = outcome.toLowerCase();
+        if (lc === 'yes') outcome = 'Yes';
+        else if (lc === 'no') outcome = 'No';
+
+        markets[cid].positions.push({
+          addr,
+          outcome: outcome || null,
+          // question is the specific market question (e.g. "Will Twins win?")
+          // title is the event label (e.g. "Marlins vs Twins")
+          // We store both so we can show the specific bet type in the detail view
+          question: (p.question || p.marketQuestion || '').trim(),
+          value: parseFloat(p.currentValue || 0),
+          size:  parseFloat(p.size || 0),
+          price: parseFloat(p.curPrice || p.avgPrice || 0),
+        });
+
+        if (!markets[cid].title)
+          markets[cid].title = p.title || p.question || p.marketQuestion || cid;
+      }
+    });
+
+    await pool(tasks, CONCURRENCY, () => {
+      done++;
+      setProgress(done, wallets.length);
+      setStatus(`Processed ${done} / ${wallets.length} wallets…`);
+    });
+
+    const totalPositions = Object.values(markets).reduce((s, m) => s + m.positions.length, 0);
+
+    setStatus('Enriching market titles and categories…');
+    const titleSeed = {};
+    for (const [cid, m] of Object.entries(markets)) titleSeed[cid] = m.title;
+    const topCids = Object.entries(markets)
+      .sort((a, b) => b[1].whales.size - a[1].whales.size)
+      .slice(0, TOP_MARKETS * 4)   // fetch more so category filter has enough to cut from
+      .map(([cid]) => cid);
+    const { titles, categories: gammaCategories } = await enrichTitlesAndCategories(topCids, titleSeed);
+
+    // Apply category + subcategory filter
+    // Match against Gamma category/tags AND market title (so e.g. "MLB" picks up
+    // baseball games even when Gamma only labels them "Sports")
+    const filtered = Object.entries(markets).filter(([cid, m]) => {
+      if (!category) return true;
+      const blob = (gammaCategories[cid] || '') + ' ' + (titles[cid] || m.title || '').toLowerCase();
+      return matchesCategory(blob, category, subcategory);
+    });
+
+    const ranked = filtered
+      .sort((a, b) => b[1].whales.size - a[1].whales.size)
+      .slice(0, TOP_MARKETS);
+
+    // ── Render ──
+    setStatus('');
+    document.getElementById('prog-wrap').style.display = 'none';
+
+    // Summary chips
+    document.getElementById('summary-row').innerHTML = [
+      { val: wallets.length, lbl: 'Whales scanned' },
+      { val: Object.keys(markets).length, lbl: 'Unique markets' },
+      { val: totalPositions, lbl: 'Open positions' },
+    ].map(c => `
+      <div class="summary-chip">
+        <div class="val">${c.val.toLocaleString()}</div>
+        <div class="lbl">${c.lbl}</div>
+      </div>`).join('');
+
+    const catNote = filterLabel ? ` · showing <strong>${escHtml(filterLabel)}</strong> markets only` : '';
+    document.getElementById('scan-meta').innerHTML =
+      `Ranked top <strong>${wallets.length}</strong> wallets by <strong>profit</strong> ` +
+      `(${WINDOW_LABEL[timePeriod]})${catNote}. Convergence is measured across all ${wallets.length}.`;
+
+    // Cards — denominator is ALWAYS the scanned wallet count
+    const N = wallets.length;
+
+    // Empty state: filter eliminated everything
+    if (ranked.length === 0) {
+      const reason = filterLabel
+        ? `No <strong>${escHtml(filterLabel)}</strong> markets found among the top ${N} profit leaders' positions.<br>` +
+          `Try <strong>All markets</strong>, increase <strong># Wallets</strong>, or pick a different category.`
+        : 'No markets found. Try increasing # Wallets or switching the window.';
+      document.getElementById('cards').innerHTML =
+        `<div class="card" style="text-align:center;color:var(--sub);padding:24px 16px;">${reason}</div>`;
+      document.getElementById('results').style.display = 'block';
+      document.getElementById('header-sub').textContent =
+        `Top ${N} by profit · ${WINDOW_LABEL[timePeriod]}${filterLabel ? ' · ' + filterLabel : ''}`;
+      return;
+    }
+
+    document.getElementById('cards').innerHTML = ranked.map(([cid, m], i) => {
+      const title      = titles[cid] || cid;
+      const inMarket   = m.whales.size;
+      const sittingOut = N - inMarket;
+      const pctOfAll   = (100 * inMarket / N).toFixed(1);
+
+      // Roll positions up to net per-wallet direction (handles hedges)
+      const byWallet = {};  // addr → { yes: $value, no: $value, totalValue, picks: Set, positions:[] }
+      for (const p of m.positions) {
+        if (!byWallet[p.addr]) byWallet[p.addr] = { yes: 0, no: 0, totalValue: 0, picks: new Set(), positions: [] };
+        const w = byWallet[p.addr];
+        w.positions.push(p);
+        w.totalValue += p.value;
+        if (p.outcome === 'Yes') w.yes += p.value;
+        else if (p.outcome === 'No') w.no += p.value;
+        if (p.outcome) w.picks.add(p.outcome);
+      }
+
+      // Per-whale net direction — carry positions[] forward so the detail
+      // view can list every individual bet
+      const whaleRows = Object.entries(byWallet).map(([addr, w]) => {
+        let pick = null;
+        if (w.yes > w.no)      pick = 'Yes';
+        else if (w.no > w.yes) pick = 'No';
+        else if (w.picks.size === 1) pick = [...w.picks][0]; // non-binary outcome
+        return {
+          addr,
+          pick,
+          value: w.totalValue,
+          isHedge: w.yes > 0 && w.no > 0,
+          positions: w.positions || [],   // <-- this was missing, caused crash
+        };
+      }).sort((a, b) => b.value - a.value);
+
+      const yesN = whaleRows.filter(r => r.pick === 'Yes').length;
+      const noN  = whaleRows.filter(r => r.pick === 'No').length;
+      const otherEntries = whaleRows.filter(r => r.pick && r.pick !== 'Yes' && r.pick !== 'No');
+      const totalVotes   = yesN + noN + otherEntries.length;
+
+      let badge, barYesPct, splitText;
+      if (totalVotes === 0) {
+        badge     = `<span class="bet-badge bet-unknown">No data</span>`;
+        barYesPct = 0;
+        splitText = '—';
+      } else if (otherEntries.length === 0) {
+        if (yesN === noN) {
+          badge = `<span class="bet-badge bet-split">TIE ${yesN}/${noN}</span>`;
+        } else if (yesN > noN) {
+          badge = `<span class="bet-badge bet-yes">YES ${yesN}/${inMarket}</span>`;
+        } else {
+          badge = `<span class="bet-badge bet-no">NO ${noN}/${inMarket}</span>`;
+        }
+        barYesPct = totalVotes ? yesN / totalVotes : 0.5;
+        splitText = `${yesN}Y&nbsp;/&nbsp;${noN}N`;
+      } else {
+        // Multi-outcome market: tally by pick label
+        const tally = {};
+        for (const r of whaleRows) if (r.pick) tally[r.pick] = (tally[r.pick] || 0) + 1;
+        const top = Object.entries(tally).sort((a, b) => b[1] - a[1]);
+        const [label, count] = top[0];
+        badge = `<span class="bet-badge bet-yes">${escHtml(label)} ${count}/${inMarket}</span>`;
+        barYesPct = totalVotes ? count / totalVotes : 0;
+        splitText = top.slice(0, 3).map(([k, v]) => `${escHtml(k)}&nbsp;${v}`).join('&nbsp;/&nbsp;');
+      }
+
+      // Build per-wallet detail rows, showing every specific bet they hold
+      const detailRows = whaleRows.map(r => {
+        const shortAddr = `${r.addr.slice(0, 6)}…${r.addr.slice(-4)}`;
+        const totalValStr = fmtVal(r.value);
+
+        // Render one tag per individual position this wallet holds in the market.
+        // Defensive: positions may be missing on legacy data shapes.
+        const posList = Array.isArray(r.positions) ? r.positions : [];
+        const sortedPos = [...posList].sort((a, b) => b.value - a.value);
+        const tags = sortedPos.map(p => {
+          const out = p.outcome || '?';
+          const betValStr = p.value > 0 ? ` · ${fmtVal(p.value)}` : '';
+
+          // Determine what label to show:
+          // 1. If Yes/No outcome AND a specific question exists → show the question
+          // 2. If named outcome (e.g. "Minnesota Twins") → show as-is
+          // 3. Fallback to raw outcome
+          let label, cls;
+          if (out === 'Yes' || out === 'No') {
+            cls = out === 'Yes' ? 'yes' : 'no';
+            // Use the specific question if it meaningfully describes the bet
+            const q = p.question && p.question !== (m.title || '') ? p.question : null;
+            label = q ? `${out === 'Yes' ? '✓' : '✗'} ${q}` : (out === 'Yes' ? 'YES' : 'NO');
+          } else if (out === '?') {
+            cls = 'hedge'; label = 'No data';
+          } else {
+            // Named outcome — show exactly as returned (e.g. "Minnesota Twins", "Over 9.5")
+            cls = 'named'; label = out;
+          }
+
+          const truncLabel = label.length > 32 ? label.slice(0, 30) + '…' : label;
+          return `<span class="bet-tag ${cls}">${escHtml(truncLabel)}<span class="bet-val">${escHtml(betValStr)}</span></span>`;
+        }).join('');
+
+        return `
+          <a class="wallet-row" href="https://polymarket.com/profile/${r.addr}" target="_blank" rel="noopener">
+            <div class="wallet-info">
+              <span class="wallet-addr">${shortAddr}</span>
+              <div class="bet-tags">${tags}</div>
+            </div>
+            <span class="wallet-total">${totalValStr}</span>
+            <span class="wallet-arrow">↗</span>
+          </a>`;
+      }).join('');
+
+      const togglePrompt = `Show ${whaleRows.length} wallet${whaleRows.length === 1 ? '' : 's'}`;
+
+      return `
+        <div class="card" id="card-${i}">
+          <div class="card-header">
+            <span class="rank">#${i + 1}</span>
+            <span class="question">${escHtml(title)}</span>
+            <span class="whale-count">${inMarket}</span>
+          </div>
+          <div class="convergence-line">
+            <span class="pct-badge">${pctOfAll}%</span>
+            <span class="num">${inMarket}</span> of <span class="num">${N}</span> scanned whales bet here
+            · <span class="num">${sittingOut}</span> sat it out
+          </div>
+          <div class="bet-row">
+            ${badge}
+            <div class="bar-wrap">
+              <div class="bar-yes" style="width:${(barYesPct*100).toFixed(1)}%"></div>
+              <div class="bar-no"  style="width:${((1-barYesPct)*100).toFixed(1)}%"></div>
+            </div>
+            <span class="split-label">${splitText}</span>
+          </div>
+          <div class="toggle-row" onclick="toggleCard(${i})">
+            <span class="chev">▾</span>
+            <span class="toggle-label">${togglePrompt}</span>
+          </div>
+          <div class="wallet-list">
+            ${detailRows}
+            <div class="wallet-hint">Tap any address to open on Polymarket and verify</div>
+          </div>
+        </div>`;
+    }).join('');
+
+    // Header subtitle reflects the active query
+    const catSuffix = filterLabel ? ` · ${filterLabel.replace(/^[^\w]+\s*/, '')}` : '';
+    document.getElementById('header-sub').textContent =
+      `Top ${N} by profit · ${WINDOW_LABEL[timePeriod]}${catSuffix}`;
+
+    document.getElementById('results').style.display = 'block';
+
+  } catch (err) {
+    setStatus('');
+    document.getElementById('prog-wrap').style.display = 'none';
+    showError(err.message || String(err));
+  } finally {
+    btn.disabled = false;
+  }
+}
+</script>
+</body>
+</html>
