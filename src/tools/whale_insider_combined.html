@@ -619,6 +619,64 @@
     color: var(--muted);
   }
   footer a { color: var(--muted); }
+
+  /* ── Edge alert ── */
+  .edge-alert {
+    display: inline-block;
+    font-size: 0.68rem;
+    font-weight: 800;
+    padding: 3px 9px;
+    border-radius: 5px;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    margin-bottom: 6px;
+  }
+  .edge-alert.value     { background: #062818; border: 1px solid #00e5a0; color: var(--accent); }
+  .edge-alert.fade      { background: #2a0611; border: 1px solid var(--red); color: var(--red); }
+  .edge-alert.priced-in { background: #1a1a1a; border: 1px solid #444; color: var(--sub); }
+
+  /* ── Smart money score ── */
+  .smart-row {
+    padding: 6px 14px;
+    border-top: 1px solid var(--border);
+    font-size: 0.74rem;
+    color: var(--sub);
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .smart-val { font-weight: 800; color: var(--purple); }
+
+  /* ── Hot cluster ── */
+  .hot-badge {
+    display: inline-block;
+    font-size: 0.63rem;
+    font-weight: 800;
+    padding: 2px 7px;
+    border-radius: 4px;
+    background: #2a1400;
+    border: 1px solid #e59000;
+    color: #e59000;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    margin-left: 8px;
+    vertical-align: middle;
+  }
+
+  /* ── Cross-tab insider signal ── */
+  .insider-badge {
+    display: inline-block;
+    font-size: 0.65rem;
+    font-weight: 800;
+    padding: 2px 8px;
+    border-radius: 4px;
+    background: #090929;
+    border: 1px solid var(--blue);
+    color: var(--blue);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    margin-bottom: 6px;
+  }
 </style>
 </head>
 <body>
@@ -691,6 +749,7 @@
       <select id="ctrl-sort">
         <option value="whales">Most Whales</option>
         <option value="edge">Biggest Edge</option>
+        <option value="smart">Smart Money $</option>
       </select>
     </label>
   </div>
@@ -821,6 +880,15 @@
       </select>
     </label>
   </div>
+
+  <!-- Optional Quiver key -->
+  <div class="controls" style="grid-template-columns:1fr; margin-bottom:4px;">
+    <label class="ctrl">
+      <span class="ctrl-label">Quiver Quantitative Key (optional)</span>
+      <input type="text" id="quiver-key" placeholder="Free key at quiverquant.com — richer congressional data" autocomplete="off" spellcheck="false">
+    </label>
+  </div>
+  <div class="api-key-hint" style="margin:-4px 0 10px; font-size:0.72rem; color:var(--sub);">Get a free key at <a href="https://www.quiverquant.com" target="_blank" style="color:var(--accent);">quiverquant.com</a> to supplement the S3 data sources</div>
 
   <button id="pt-run-btn" class="run-btn" onclick="loadTrades()">Load Trades</button>
 
@@ -1230,6 +1298,122 @@ function detectSport(title, blob) {
   return null;
 }
 
+// ─── Smart Money Score ───────────────────────────────────────────────────────
+function smartScoreCalc(whaleRows, whaleRankMap, N) {
+  let score = 0;
+  for (const w of whaleRows) {
+    const rank = whaleRankMap[w.addr] || N;
+    const rankWeight = (N - rank + 1) / N;
+    score += Math.max(w.value || 0, 1) * rankWeight;
+  }
+  return score;
+}
+
+// ─── Hot cluster detection ───────────────────────────────────────────────────
+function detectHotCluster(trades, windowDays = 30, minCount = 3) {
+  if (trades.length < minCount) return null;
+  const sorted = trades.filter(t => t.transaction_date)
+    .sort((a, b) => a.transaction_date - b.transaction_date);
+  if (sorted.length < minCount) return null;
+  const windowMs = windowDays * 86400000;
+  for (let i = 0; i <= sorted.length - minCount; i++) {
+    const start = sorted[i].transaction_date.getTime();
+    const inWin = sorted.filter(t => {
+      const ts = t.transaction_date.getTime();
+      return ts >= start && ts <= start + windowMs;
+    });
+    if (inWin.length >= minCount) {
+      return {
+        count: inWin.length,
+        pols: new Set(inWin.map(t => t.name)).size,
+        from: sorted[i].transaction_date.toISOString().slice(0, 10),
+        to: inWin[inWin.length - 1].transaction_date.toISOString().slice(0, 10),
+      };
+    }
+  }
+  return null;
+}
+
+// ─── Cross-tab insider signal ─────────────────────────────────────────────────
+function getInsiderSignal(title, blob) {
+  if (!ptAllTrades.length) return null;
+  const cutoff = new Date(Date.now() - 90 * 86400000);
+  const recent = ptAllTrades.filter(t => t.transaction_date && t.transaction_date >= cutoff);
+  if (!recent.length) return null;
+
+  const COMMON = new Set(['US', 'NBA', 'NFL', 'MLB', 'NHL', 'UFC', 'YES', 'NO', 'THE', 'AND', 'OR', 'FOR', 'WIN', 'WILL', 'WHO', 'CAN', 'WON', 'NEW']);
+  const titleTickers = (title.match(/\b[A-Z]{2,5}\b/g) || []).filter(t => !COMMON.has(t));
+
+  let matches = titleTickers.length
+    ? recent.filter(t => titleTickers.includes(t.ticker))
+    : [];
+
+  if (!matches.length) {
+    const hay = (title + ' ' + blob).toLowerCase();
+    for (const [cat, tickers] of Object.entries(SECTOR_TICKERS)) {
+      if (!tickers.length) continue;
+      const aliases = CATEGORY_ALIASES[cat] || [cat];
+      if (aliases.some(a => hay.includes(a))) {
+        matches = recent.filter(t => tickers.includes(t.ticker));
+        if (matches.length) break;
+      }
+    }
+  }
+
+  if (!matches.length) return null;
+  return {
+    pols:    new Set(matches.map(t => t.name)).size,
+    buys:    matches.filter(t => t.action === 'buy').length,
+    sells:   matches.filter(t => t.action === 'sell').length,
+    tickers: [...new Set(matches.map(t => t.ticker))].slice(0, 3),
+  };
+}
+
+// ─── Quiver Quantitative fetch ────────────────────────────────────────────────
+async function fetchQuiverTrades(apiKey) {
+  if (!apiKey) return [];
+  const headers = { 'Authorization': `Token ${apiKey}`, 'Accept': 'application/json' };
+  const fetchQ = async url => {
+    try {
+      const res = await fetch(url, { headers });
+      if (!res.ok) return [];
+      return res.json();
+    } catch {
+      try {
+        const res2 = await fetch(CORS_PROXY + encodeURIComponent(url),
+          { headers: { ...headers, 'Accept': 'application/json' } });
+        if (!res2.ok) return [];
+        return res2.json();
+      } catch { return []; }
+    }
+  };
+  const [hRaw, sRaw] = await Promise.all([fetchQ(QUIVER_HOUSE_URL), fetchQ(QUIVER_SENATE_URL)]);
+  const norm = (arr, chamber) => (Array.isArray(arr) ? arr : []).map(t => {
+    const ticker = (t.Ticker || t.ticker || '').toUpperCase().trim();
+    if (!ticker) return null;
+    const txDate = parseDate(t.Date || t.TransactionDate || '');
+    const dsDate = parseDate(t.DisclosureDate || t.disclosure_date || '');
+    return {
+      chamber,
+      name:             cleanName(t.Senator || t.Representative || t.Name || ''),
+      party:            (t.Party || '').charAt(0).toUpperCase(),
+      state:            t.State || '',
+      district:         t.District || '',
+      ticker,
+      asset:            t.Asset || t.AssetDescription || '',
+      type:             t.Transaction || t.Type || '',
+      action:           classifyAction(t.Transaction || t.Type || ''),
+      amountStr:        t.Range || t.Amount || '',
+      amount:           parseAmount(t.Range || t.Amount || ''),
+      transaction_date: txDate,
+      disclosure_date:  dsDate,
+      delay_days:       daysBetween(txDate, dsDate),
+      ptr_link:         '',
+    };
+  }).filter(t => t && t.ticker && t.transaction_date);
+  return [...norm(hRaw, 'House'), ...norm(sRaw, 'Senate')];
+}
+
 // ─── Main analysis ────────────────────────────────────────────────────────────
 async function runAnalysis() {
   const btn = document.getElementById('w-run-btn');
@@ -1264,6 +1448,8 @@ async function runAnalysis() {
     wSetStatus(`Fetching top ${topN} profit wallets (${WINDOW_LABEL[timePeriod]})…`);
     const wallets = await fetchLeaderboard(topN, timePeriod);
     if (!wallets.length) throw new Error('No wallets returned from leaderboard.');
+    const whaleRankMap = {};
+    wallets.forEach((addr, i) => { whaleRankMap[addr] = i + 1; });
 
     const markets = {};
     let done = 0;
@@ -1594,9 +1780,21 @@ try {
 // ════════════════════════════════════════════════════════════
 
 // ─── Constants ──────────────────────────────────────────────────────────────
-const HOUSE_URL   = 'https://house-stock-watcher-data.s3-us-west-2.amazonaws.com/data/all_transactions.json';
-const SENATE_URL  = 'https://senate-stock-watcher-data.s3-us-west-2.amazonaws.com/aggregate/all_transactions.json';
+const HOUSE_URL        = 'https://house-stock-watcher-data.s3-us-west-2.amazonaws.com/data/all_transactions.json';
+const SENATE_URL       = 'https://senate-stock-watcher-data.s3-us-west-2.amazonaws.com/aggregate/all_transactions.json';
+const QUIVER_HOUSE_URL  = 'https://api.quiverquant.com/beta/live/housetrading';
+const QUIVER_SENATE_URL = 'https://api.quiverquant.com/beta/live/senatetrading';
 const TOP_RESULTS = 100;
+
+const SECTOR_TICKERS = {
+  tech:      ['NVDA', 'AAPL', 'MSFT', 'GOOGL', 'GOOG', 'META', 'AMZN', 'TSLA', 'AMD', 'INTC', 'CRM', 'ORCL', 'AVGO', 'QCOM', 'SNOW', 'PLTR'],
+  crypto:    ['COIN', 'MSTR', 'MARA', 'RIOT', 'CLSK', 'HUT', 'BTBT', 'CIFR', 'BITO'],
+  economics: ['JPM', 'BAC', 'GS', 'MS', 'WFC', 'C', 'V', 'MA', 'SPY', 'QQQ', 'XLF', 'BRK'],
+  politics:  ['LMT', 'RTX', 'NOC', 'BA', 'GD', 'HII', 'LDOS', 'SAIC', 'XOM', 'CVX', 'COP', 'SLB'],
+  sports:    ['DKNG', 'PENN', 'MGM', 'BALY', 'WYNN', 'LVS'],
+  culture:   ['DIS', 'NFLX', 'CMCSA', 'T', 'PARA', 'WBD', 'SPOT'],
+  weather:   ['XOM', 'CVX', 'NEE', 'AEP', 'SO', 'DUK'],
+};
 
 let ptAllTrades = [];
 let ptCurrentView = 'recent';
