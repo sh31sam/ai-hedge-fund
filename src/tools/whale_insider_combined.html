@@ -1579,12 +1579,13 @@ async function runAnalysis() {
       }
 
       const edge = (polyProb != null && vegasProb != null) ? polyProb - vegasProb : null;
+      const smartScore = smartScoreCalc(whaleRows, whaleRankMap, N);
 
       return {
         cid, title, blob, sportInfo, vegasMatch,
         whales: m.whales.size, whaleRows, totalVotes,
         yesN, noN, otherRows, dominantPick,
-        polyProb, vegasProb, vegasTeam, edge,
+        polyProb, vegasProb, vegasTeam, edge, smartScore,
       };
     });
 
@@ -1595,6 +1596,7 @@ async function runAnalysis() {
         const eb = b.edge != null ? Math.abs(b.edge) : -1;
         return eb - ea;
       }
+      if (sortMode === 'smart') return b.smartScore - a.smartScore;
       return b.whales - a.whales;
     }).slice(0, TOP_MARKETS);
 
@@ -1631,8 +1633,8 @@ async function runAnalysis() {
     }
 
     document.getElementById('w-cards').innerHTML = ranked.map((r, i) => {
-      const { cid, title, sportInfo, vegasMatch, whales, whaleRows, totalVotes,
-              yesN, noN, otherRows, dominantPick, polyProb, vegasProb, vegasTeam, edge } = r;
+      const { cid, title, blob, sportInfo, vegasMatch, whales, whaleRows, totalVotes,
+              yesN, noN, otherRows, dominantPick, polyProb, vegasProb, vegasTeam, edge, smartScore } = r;
       const sittingOut = N - whales;
       const pctOfAll   = (100 * whales / N).toFixed(1);
 
@@ -1718,17 +1720,40 @@ async function runAnalysis() {
           </a>`;
       }).join('');
 
+      const edgePctAbs = edge != null ? Math.round(edge * 100) : null;
+      const edgeAlertHtml = edgePctAbs != null && Math.abs(edgePctAbs) >= 10
+        ? (edgePctAbs > 0
+            ? `<div class="edge-alert value">⚡ +${edgePctAbs}% POLY ABOVE VEGAS</div>`
+            : `<div class="edge-alert fade">⚡ ${edgePctAbs}% VALUE vs VEGAS</div>`)
+        : (edgePctAbs != null && Math.abs(edgePctAbs) < 5
+            ? `<div class="edge-alert priced-in">✓ PRICED IN ±${Math.abs(edgePctAbs)}%</div>`
+            : '');
+
+      const insiderSig = getInsiderSignal(title, blob);
+      const insiderHtml = insiderSig
+        ? `<div class="insider-badge">🏛️ INSIDER · ${insiderSig.pols} pol${insiderSig.pols===1?'':'s'} · ${insiderSig.tickers.join(' ')} · ${insiderSig.buys}B/${insiderSig.sells}S (90d)</div>`
+        : '';
+
+      const smartFmt = smartScore >= 1000 ? `$${(smartScore/1000).toFixed(1)}k` : `$${Math.round(smartScore)}`;
+
       return `
       <div class="card" id="card-${i}">
         <div class="card-header">
           <div class="card-rank">#${i+1}</div>
           ${gameLabel ? `<div class="sport-tag">${escHtml(gameLabel)}</div><br>` : ''}
+          ${edgeAlertHtml}
+          ${insiderHtml}
           <div class="card-title">${escHtml(title)}</div>
         </div>
         <div class="whale-row">
           <div class="whale-count">🐳 ${whales}/${N}</div>
           <div class="whale-sub">${pctOfAll}% · ${sittingOut} sat out</div>
           ${badge}
+        </div>
+        <div class="smart-row">
+          <span>Smart $ Score:</span>
+          <span class="smart-val">${smartFmt}</span>
+          <span style="color:var(--muted);font-size:0.68rem;">rank-weighted position size</span>
         </div>
         <div class="odds-grid">
           <div class="odds-cell">
@@ -1932,11 +1957,25 @@ async function loadTrades() {
     if (!house) console.warn('House data unavailable:', houseErr);
     if (!senate) console.warn('Senate data unavailable:', senateErr);
 
+    const quiverKey = document.getElementById('quiver-key').value.trim();
+    let quiverTrades = [];
+    if (quiverKey) {
+      ptSetStatus('Fetching Quiver Quantitative data…');
+      try { quiverTrades = await fetchQuiverTrades(quiverKey); } catch (e) { console.warn('Quiver fetch failed:', e); }
+    }
+
     ptSetStatus('Normalizing data…');
     const houseTrades  = (house  || []).map(normalizeHouseTrade);
     const senateTrades = (senate || []).map(normalizeSenateTrade);
-    ptAllTrades = [...houseTrades, ...senateTrades]
-      .filter(t => t.ticker && t.transaction_date);
+    const allRaw = [...houseTrades, ...senateTrades, ...quiverTrades];
+    const seen = new Set();
+    ptAllTrades = allRaw.filter(t => {
+      if (!t.ticker || !t.transaction_date) return false;
+      const key = `${t.name}|${t.ticker}|${t.transaction_date.toISOString().slice(0,10)}|${t.action}`;
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
 
     ptSetStatus('');
     document.getElementById('pt-prog-wrap').style.display = 'none';
@@ -1993,8 +2032,9 @@ function ptRender() {
     </div>`).join('');
 
   const windowLabel = days === 0 ? 'all available data' : `last ${days} days`;
+  const quiverKey2 = document.getElementById('quiver-key').value.trim();
   document.getElementById('pt-scan-meta').innerHTML =
-    `Showing trades from <strong>${escHtml(windowLabel)}</strong>. Disclosed via the STOCK Act PTR filings.`;
+    `Showing trades from <strong>${escHtml(windowLabel)}</strong>. Sources: House/Senate PTR filings${quiverKey2 ? ' + Quiver Quantitative' : ''}.`;
 
   document.getElementById('pt-results').style.display = 'block';
 
@@ -2079,6 +2119,10 @@ function ptRenderConvergence(trades) {
     const netCls = g.netAmount > 0 ? 'positive' : g.netAmount < 0 ? 'negative' : '';
     const netStr = g.netAmount === 0 ? '$0' : (g.netAmount > 0 ? '+' : '−') + fmtUSD(Math.abs(g.netAmount));
     const ytickerUrl = `https://finance.yahoo.com/quote/${encodeURIComponent(g.ticker)}`;
+    const cluster = detectHotCluster(g.trades);
+    const hotHtml = cluster
+      ? `<span class="hot-badge">🔥 HOT · ${cluster.count} trades · ${cluster.pols} pols · ${cluster.from} → ${cluster.to}</span>`
+      : '';
 
     const polSummary = {};
     for (const t of g.trades) {
@@ -2104,7 +2148,7 @@ function ptRenderConvergence(trades) {
     return `
       <div class="conv" id="conv-${i}">
         <div class="conv-top">
-          <div class="conv-ticker"><a href="${escHtml(ytickerUrl)}" target="_blank" rel="noopener" style="color:inherit;text-decoration:none;">${escHtml(g.ticker)} ↗</a></div>
+          <div class="conv-ticker"><a href="${escHtml(ytickerUrl)}" target="_blank" rel="noopener" style="color:inherit;text-decoration:none;">${escHtml(g.ticker)} ↗</a>${hotHtml}</div>
           <div class="conv-stats">
             <span><strong style="color:var(--text)">${g.politicians.size}</strong> politicians</span>
             <span><span style="color:var(--accent)">${g.buys}</span> buys · <span style="color:var(--red)">${g.sells}</span> sells</span>
