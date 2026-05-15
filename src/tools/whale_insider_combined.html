@@ -1211,9 +1211,10 @@ function matchScore(polyTitle, game) {
   return hits / Math.max(gameWords.length, 1);
 }
 
-function findVegasMatch(polyTitle, vegasGames) {
+function findVegasMatch(polyTitle, vegasGames, sportLabel) {
+  const pool = sportLabel ? vegasGames.filter(g => g.sport === sportLabel) : vegasGames;
   let best = null, bestScore = 0;
-  for (const g of vegasGames) {
+  for (const g of pool) {
     const s = matchScore(polyTitle, g);
     if (s > bestScore && s >= 0.3) { best = g; bestScore = s; }
   }
@@ -1329,7 +1330,7 @@ async function runAnalysis() {
       const title = titles[cid] || m.title || cid;
       const blob  = blobs[cid] || '';
       const sportInfo = detectSport(title, blob);
-      const vegasMatch = vegasGames.length ? findVegasMatch(title, vegasGames) : null;
+      const vegasMatch = vegasGames.length ? findVegasMatch(title, vegasGames, sportInfo?.sport) : null;
 
       const byWallet = {};
       for (const p of m.positions) {
@@ -1712,25 +1713,30 @@ async function loadTrades() {
   try {
     ptSetStatus('Fetching House transactions…');
     ptSetProgress(0, 2);
-    let house = [], senate = [];
+    let house = null, senate = null;
+    let houseErr = null, senateErr = null;
     try {
       house = await fetchWithFallback(HOUSE_URL);
-    } catch (e) { console.warn('House fetch failed:', e); }
+      if (!Array.isArray(house)) { houseErr = 'Unexpected response format'; house = null; }
+    } catch (e) { houseErr = e.message; }
     ptSetProgress(1, 2);
 
     ptSetStatus('Fetching Senate transactions…');
     try {
       senate = await fetchWithFallback(SENATE_URL);
-    } catch (e) { console.warn('Senate fetch failed:', e); }
+      if (!Array.isArray(senate)) { senateErr = 'Unexpected response format'; senate = null; }
+    } catch (e) { senateErr = e.message; }
     ptSetProgress(2, 2);
 
-    if (!Array.isArray(house) && !Array.isArray(senate)) {
-      throw new Error('Could not fetch either House or Senate data. CORS may be blocking.');
+    if (!house && !senate) {
+      throw new Error(`Could not fetch House or Senate data. House: ${houseErr || 'unknown'} · Senate: ${senateErr || 'unknown'}`);
     }
+    if (!house) console.warn('House data unavailable:', houseErr);
+    if (!senate) console.warn('Senate data unavailable:', senateErr);
 
     ptSetStatus('Normalizing data…');
-    const houseTrades  = (Array.isArray(house)  ? house  : []).map(normalizeHouseTrade);
-    const senateTrades = (Array.isArray(senate) ? senate : []).map(normalizeSenateTrade);
+    const houseTrades  = (house  || []).map(normalizeHouseTrade);
+    const senateTrades = (senate || []).map(normalizeSenateTrade);
     ptAllTrades = [...houseTrades, ...senateTrades]
       .filter(t => t.ticker && t.transaction_date);
 
