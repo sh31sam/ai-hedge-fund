@@ -942,15 +942,21 @@ async function fetchJSON(url, params = {}) {
 
 // For S3/external APIs that may block CORS
 async function fetchWithFallback(url) {
-  try {
-    const res = await fetch(url, { headers: { 'Accept': 'application/json' } });
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    return res.json();
-  } catch {
-    const res = await fetch(CORS_PROXY + encodeURIComponent(url), { headers: { 'Accept': 'application/json' } });
-    if (!res.ok) throw new Error(`HTTP ${res.status} via proxy`);
-    return res.json();
+  const proxies = [
+    u => u,
+    u => `https://corsproxy.io/?${encodeURIComponent(u)}`,
+    u => `https://api.allorigins.win/raw?url=${encodeURIComponent(u)}`,
+    u => `https://thingproxy.freeboard.io/fetch/${u}`,
+  ];
+  let lastErr;
+  for (const makeUrl of proxies) {
+    try {
+      const res = await fetch(makeUrl(url), { headers: { 'Accept': 'application/json' } });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      return res.json();
+    } catch (e) { lastErr = e; }
   }
+  throw lastErr;
 }
 
 // ════════════════════════════════════════════════════════════
@@ -1511,6 +1517,7 @@ async function runAnalysis() {
 
     wSetStatus('Matching and computing edges…');
 
+    const N = wallets.length;
     const rows = topCids.map(cid => {
       const m = markets[cid];
       const title = titles[cid] || m.title || cid;
@@ -1589,7 +1596,6 @@ async function runAnalysis() {
       };
     });
 
-    const N = wallets.length;
     const ranked = rows.filter(r => r.whales >= minWhales).sort((a, b) => {
       if (sortMode === 'edge') {
         const ea = a.edge != null ? Math.abs(a.edge) : -1;
